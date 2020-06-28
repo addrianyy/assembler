@@ -68,6 +68,7 @@ enum RexMode {
     Unneeded,
     Implicit,
     Usable,
+    ExplicitRequired,
 }
 
 #[derive(Copy, Clone)]
@@ -88,7 +89,13 @@ struct OpcodeRegadd {
 
 struct Encoding {
     rex:        RexMode,
+
+    // r64, r/m64
     regreg:     Option<Opcode>,
+
+    // r/m64, r64
+    regreg_inv: Option<Opcode>,
+
     regimm32:   Option<OpcodeDigit>,
     memimm32:   Option<OpcodeDigit>,
     reguimm8:   Option<OpcodeDigit>,
@@ -133,11 +140,11 @@ impl Assembler {
 
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
-            RexMode::Implicit => {
+            RexMode::Implicit | RexMode::ExplicitRequired => {
                 assert!(self.operand_size == OperandSize::Bits64,
                         "This operation requires 64 bit operand size.");
 
-                false
+                encoding.rex == RexMode::ExplicitRequired
             }
             RexMode::Usable   => self.operand_size == OperandSize::Bits64,
             RexMode::Unneeded => false,
@@ -292,9 +299,17 @@ impl Assembler {
                     encoding.memcl.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg1), Operand::Reg(reg2)]
-                if encoding.regreg.is_some() =>
+                if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
             {
-                self.encode_regreg(reg1, reg2, encoding.regreg.as_ref().unwrap(), encoding);
+                match (encoding.regreg, encoding.regreg_inv) {
+                    (Some(regreg), None) => {
+                        self.encode_regreg(reg1, reg2, &regreg, encoding);
+                    }
+                    (None, Some(regreg_inv)) => {
+                        self.encode_regreg(reg2, reg1, &regreg_inv, encoding);
+                    }
+                    _ => panic!("Regreg and inverted regreg both implemented for {}.", name),
+                }
             }
             &[Operand::Reg(reg), Operand::Imm(imm)]
                 if fits_within!(imm, u8) && encoding.reguimm8.is_some() =>

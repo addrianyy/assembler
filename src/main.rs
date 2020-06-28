@@ -18,7 +18,7 @@ fn main() {
 
     asm.label("SS");
     asm.cmp(&[Reg(R15), Mem(Some(Rcx), None, 0xcc)]);
-    asm.mov(&[Reg(R13), Imm(i64::MAX)]);
+    //asm.mov(&[Reg(R13), Imm(i64::MAX)]);
     asm.cmp(&[Reg(R10), Reg(Rcx)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Reg(R12)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Imm(0x1337)]);
@@ -32,14 +32,32 @@ fn main() {
 
     asm.cmovae(&[Reg(Rax), Reg(Rdx)]);
 
+    asm.ror(&[Reg(R8), Reg(Rcx)]);
+
     asm.lea(&[Reg(R9), Mem(Some(R15), Some((Rdx, 2)), 8)]);
 
-    asm.ret(&[]);
+    asm.ret(&[Imm(16)]);
     asm.int3(&[]);
 
     asm.imul(&[Reg(Rcx), Mem(Some(R12), None, 0xcc)]);
+    asm.imul(&[Reg(Rcx), Reg(R13)]);
 
     asm.dec(&[Reg(Rdx)]);
+    asm.test(&[Reg(Rcx), Reg(Rdx)]);
+    asm.lea(&[Reg(Rdx), Mem(Some(Rbx), None, 99)]);
+    asm.int3(&[]);
+
+    asm.inc(&[Reg(R11)]);
+    asm.pop(&[Reg(R10)]);
+
+    //asm.operand_size(asm::OperandSize::Bits32);
+    asm.movsx(&[Reg(Rax), Reg(R15)]);
+    //asm.movsx(&[Reg(Rcx), Mem(Some(R9), None, 0xcc)]);
+
+    asm.mov(&[Reg(Rbx), Imm(-1337)]);
+
+    asm.operand_size(asm::OperandSize::Bits32);
+    asm.cqo(&[]);
 
     asm.relocate();
 
