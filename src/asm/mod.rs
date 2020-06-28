@@ -82,6 +82,10 @@ struct OpcodeDigit {
 }
 
 #[derive(Copy, Clone)]
+struct OpcodeRegadd {
+    op: &'static [u8],
+}
+
 struct Encoding {
     rex:        RexMode,
     regreg:     Option<Opcode>,
@@ -98,6 +102,7 @@ struct Encoding {
     rel32:      Option<Opcode>,
     imm32:      Option<Opcode>,
     uimm16:     Option<Opcode>,
+    regimm64:   Option<OpcodeRegadd>,
     standalone: Option<Opcode>,
 }
 
@@ -209,10 +214,35 @@ impl Assembler {
         self.push_code(&op.op);
     }
 
+    fn encode_regimm64(&mut self, reg: Reg, imm: i64, op: &OpcodeRegadd, _encoding: &Encoding) {
+        assert!(self.operand_size == OperandSize::Bits64,
+            "This operation requires 64 bit operand size.");
+
+        assert!(op.op.len() == 1);
+
+        let (reg_e, reg_enc) = reg.encoding();
+
+        let op = op.op[0] + reg_enc;
+
+        self.rex(true, false, false, reg_e);
+        self.push_code(&[op]);
+        self.push_code(&imm.to_le_bytes());
+    }
+
     fn encode_instruction(&mut self, operands: &[Operand], encoding: &Encoding, name: &str) {
         macro_rules! fits_within {
             ($value: expr, $type: tt) => {
                 $value as i64 <= $type::MAX as i64 && $value as i64 >= $type::MIN as i64
+            }
+        }
+
+        macro_rules! fits_within_32se {
+            ($value: expr) => {
+                if self.operand_size == OperandSize::Bits32 {
+                    fits_within!($value, u32) || fits_within!($value, i32)
+                } else {
+                    fits_within!($value, i32)
+                }
             }
         }
 
@@ -233,13 +263,12 @@ impl Assembler {
             &[Operand::Reg(reg)]
                 if encoding.reg.is_some() =>
             {
-                self.encode_reg(reg, encoding.reg.as_ref().unwrap(), encoding)
+                self.encode_reg(reg, encoding.reg.as_ref().unwrap(), encoding);
             }
             &[Operand::Mem(base, index, disp)]
                 if encoding.mem.is_some() =>
             {
-                self.encode_mem((base, index, disp),
-                    encoding.mem.as_ref().unwrap(), encoding)
+                self.encode_mem((base, index, disp), encoding.mem.as_ref().unwrap(), encoding);
             }
             &[Operand::Imm(imm)]
                 if fits_within!(imm, u16) && encoding.uimm16.is_some() =>
@@ -247,7 +276,7 @@ impl Assembler {
                 self.encode_imm(imm, 2, encoding.uimm16.as_ref().unwrap(), encoding);
             }
             &[Operand::Imm(imm)]
-                if fits_within!(imm, i32) && encoding.imm32.is_some() =>
+                if fits_within_32se!(imm) && encoding.imm32.is_some() =>
             {
                 self.encode_imm(imm, 4, encoding.imm32.as_ref().unwrap(), encoding);
             }
@@ -268,7 +297,7 @@ impl Assembler {
                 self.encode_regreg(reg1, reg2, encoding.regreg.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg), Operand::Imm(imm)]
-                if fits_within!(imm, u8)  && encoding.reguimm8.is_some() =>
+                if fits_within!(imm, u8) && encoding.reguimm8.is_some() =>
             {
                 self.encode_regimm(reg, imm, 1, encoding.reguimm8.as_ref().unwrap(), encoding);
             }
@@ -279,15 +308,20 @@ impl Assembler {
                     encoding.memuimm8.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg), Operand::Imm(imm)]
-                if fits_within!(imm, i32)  && encoding.regimm32.is_some() =>
+                if fits_within_32se!(imm) && encoding.regimm32.is_some() =>
             {
                 self.encode_regimm(reg, imm, 4, encoding.regimm32.as_ref().unwrap(), encoding);
             }
             &[Operand::Mem(base, index, disp), Operand::Imm(imm)]
-                if fits_within!(imm, i32) && encoding.memimm32.is_some() =>
+                if fits_within_32se!(imm) && encoding.memimm32.is_some() =>
             {
                 self.encode_memimm((base, index, disp),
                     imm, 4, encoding.memimm32.as_ref().unwrap(), encoding);
+            }
+            &[Operand::Reg(reg), Operand::Imm(imm)]
+                if encoding.regimm64.is_some() =>
+            {
+                self.encode_regimm64(reg, imm, encoding.regimm64.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg), Operand::Mem(base, index, disp)]
                 if encoding.regmem.is_some() =>
@@ -358,6 +392,7 @@ impl Assembler {
         const RM_DISP: u8 = 0b101;
 
         let mut mem = if mem.2 == 0 { (mem.0, mem.1, None) } else { (mem.0, mem.1, Some(mem.2)) };
+        let mut index_no_base = false;
 
         if let Some(base) = mem.0 {
             has_base = true;
@@ -372,8 +407,17 @@ impl Assembler {
                 mem.2 = Some(0);
             }
         } else {
-            assert!(mem.1.is_none(), "Memory operands without base cannot have index.");
-            assert!(mem.2.is_some(), "Memory operands without base must have displacement.");
+            assert!(mem.1.is_some() || mem.2.is_some(), "Memory operand is empty.");
+
+            if mem.1.is_some() {
+                index_no_base = true;
+
+                if mem.2.is_none() {
+                    mem.2 = Some(0);
+                }
+
+                mem.0 = Some(Reg::Rbp);
+            }
         }
 
         if let Some((index, _)) = mem.1 {
@@ -408,6 +452,8 @@ impl Assembler {
         let has_displacement = mem.2.is_some();
 
         if !require_sib {
+            assert!(!index_no_base);
+
             if has_displacement {
                 let displacement = mem.2.unwrap() as u32;
 
@@ -423,7 +469,7 @@ impl Assembler {
                 self.modrm(0b00, regop, mem.0.unwrap().encoding().1);
             }
         } else {
-            if has_displacement {
+            if has_displacement && !index_no_base {
                 if byte_displacement {
                     self.modrm(0b01, regop, RM_SIB);
                 } else {
@@ -449,7 +495,7 @@ impl Assembler {
             if has_displacement {
                 let displacement = mem.2.unwrap() as u32;
 
-                if byte_displacement {
+                if byte_displacement && !index_no_base {
                     self.push_code(&(displacement as u8).to_le_bytes());
                 } else {
                     self.push_code(&displacement.to_le_bytes());
@@ -467,7 +513,7 @@ impl Assembler {
         for (target, offset, size) in &self.relocations {
             use std::convert::TryInto;
 
-            let target = *self.labels.get(target).expect("Label used but not created.");
+            let target = *self.labels.get(target).expect("Non-existant label was referenced.");
             let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
                 .try_into().expect("Target is too far.");
 

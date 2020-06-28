@@ -1,4 +1,4 @@
-use super::{Encoding, Opcode, OpcodeDigit, Assembler, RexMode, Operand};
+use super::{Encoding, Opcode, OpcodeDigit, OpcodeRegadd, Assembler, RexMode, Operand};
 
 const DEFAULT_ENCODING: Encoding = Encoding {
     rex:        RexMode::Usable,
@@ -16,6 +16,7 @@ const DEFAULT_ENCODING: Encoding = Encoding {
     rel32:      None,
     imm32:      None,
     uimm16:     None,
+    regimm64:   None,
     standalone: None,
 };
 
@@ -40,6 +41,15 @@ make_instruction! {
         rel32: Some(Opcode { op: &[0xe9] }),
         reg:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
         mem:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
+        ..DEFAULT_ENCODING
+    }
+}
+
+make_instruction! {
+    lea,
+    Encoding {
+        rex:    RexMode::Usable,
+        regmem: Some(Opcode { op: &[0x8d] }),
         ..DEFAULT_ENCODING
     }
 }
@@ -73,6 +83,7 @@ make_instruction! {
         memreg:   Some(Opcode { op: &[0x89]}),
         regimm32: Some(OpcodeDigit { op: &[0xc7], digit: 0 }),
         memimm32: Some(OpcodeDigit { op: &[0xc7], digit: 0 }),
+        regimm64: Some(OpcodeRegadd { op: &[0xb8] }),
         ..DEFAULT_ENCODING
     }
 }
