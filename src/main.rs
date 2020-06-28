@@ -56,8 +56,11 @@ fn main() {
 
     asm.mov(&[Reg(Rbx), Imm(-1337)]);
 
-    asm.operand_size(asm::OperandSize::Bits32);
+    asm.operand_size(asm::OperandSize::Bits64);
     asm.cqo(&[]);
+
+    asm.neg(&[Reg(R14)]);
+    asm.not(&[Mem(Some(Rcx), None, 0)]);
 
     asm.relocate();
 

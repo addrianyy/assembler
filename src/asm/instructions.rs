@@ -268,6 +268,26 @@ make_instruction! {
 }
 
 make_instruction! {
+    neg,
+    Encoding {
+        rex: RexMode::Usable,
+        reg: Some(OpcodeDigit { op: &[0xf7], digit: 3 }),
+        mem: Some(OpcodeDigit { op: &[0xf7], digit: 3 }),
+        ..DEFAULT_ENCODING
+    }
+}
+
+make_instruction! {
+    not,
+    Encoding {
+        rex: RexMode::Usable,
+        reg: Some(OpcodeDigit { op: &[0xf7], digit: 2 }),
+        mem: Some(OpcodeDigit { op: &[0xf7], digit: 2 }),
+        ..DEFAULT_ENCODING
+    }
+}
+
+make_instruction! {
     lea,
     Encoding {
         rex:    RexMode::Usable,
