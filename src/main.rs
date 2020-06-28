@@ -4,11 +4,16 @@ use asm::Reg::*;
 use asm::Assembler;
 
 fn main() {
-    let mut asm = Assembler::default();
+    let mut asm = Assembler::new();
+
+    asm.operand_size(asm::OperandSize::Bits32);
+
+
 
     asm.mov(&[Reg(R9), Imm(10)]);
     asm.mov(&[Reg(R8), Reg(R15)]);
     asm.mov(&[Mem(Some(R15), Some((Rdx, 4)), 0), Imm(1337)]);
+
 
     asm.label("SS");
     asm.cmp(&[Reg(R15), Mem(Some(Rcx), None, 0xcc)]);
@@ -21,7 +26,7 @@ fn main() {
     asm.shr(&[Reg(R8), Reg(Rcx)]);
 
     asm.jmp(&[Rel(0x10)]);
-    asm.pop(&[Mem(Some(Rax), None, 0)]);
+    //asm.pop(&[Mem(Some(Rax), None, 0)]);
     asm.jz(&[Label("SS")]);
 
     asm.cmovae(&[Reg(Rax), Reg(Rdx)]);
@@ -39,11 +44,13 @@ fn main() {
 }
 
 fn disasm(asm: &Assembler) {
-    std::fs::write("assembly.bin", &asm.bytes)
+    std::fs::write("assembly.bin", asm.bytes())
         .expect("Failed to write assembly.bin");
 
     std::process::Command::new("ndisasm")
         .args(&["-b", "64", "assembly.bin"])
         .spawn()
+        .unwrap()
+        .wait()
         .unwrap();
 }
