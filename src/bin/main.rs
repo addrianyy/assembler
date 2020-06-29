@@ -5,9 +5,7 @@ use asm::Assembler;
 fn main() {
     let mut asm = Assembler::new();
 
-    asm.operand_size(asm::OperandSize::Bits64);
-
-
+    asm.operand_size(asm::OperandSize::Bits32);
 
     asm.mov(&[Reg(R9), Imm(10)]);
     asm.mov(&[Reg(R8), Reg(R15)]);
@@ -17,7 +15,7 @@ fn main() {
 
     asm.label("SS");
     asm.cmp(&[Reg(R15), Mem(Some(Rcx), None, 0xcc)]);
-    asm.mov(&[Reg(Rsp), Imm(i64::MAX)]);
+    //asm.mov(&[Reg(Rsp), Imm(i64::MAX)]);
     asm.cmp(&[Reg(R10), Reg(Rcx)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Reg(R12)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Imm(0x1337)]);
@@ -48,7 +46,7 @@ fn main() {
     asm.int3(&[]);
 
     asm.inc(&[Reg(R11)]);
-    asm.pop(&[Reg(R10)]);
+    //asm.pop(&[Reg(R10)]);
 
     //asm.operand_size(asm::OperandSize::Bits32);
     asm.movsx(&[Reg(Rax), Reg(R15)]);
