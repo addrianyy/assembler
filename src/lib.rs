@@ -141,22 +141,20 @@ impl Assembler {
         }
     }
 
-    fn allocate_label(&mut self, name: &str) -> LabelID {
-        let label_id = self.next_free_label_id;
-
-        assert!(self.label_to_id.insert(name.to_string(), label_id).is_none(),
-            "Label {} was already created.", name);
-
-        self.next_free_label_id = LabelID(label_id.0
-            .checked_add(1).expect("Label IDs overflowed"));
-
-        label_id
-    }
-
     fn label_to_id(&mut self, label: &str) -> LabelID {
         match self.label_to_id.get(label) {
             Some(label_id) => *label_id,
-            None           => self.allocate_label(label),
+            None           => {
+                let label_id = self.next_free_label_id;
+
+                assert!(self.label_to_id.insert(label.to_string(), label_id).is_none(),
+                    "Label {} was already created.", label);
+
+                self.next_free_label_id = LabelID(label_id.0
+                    .checked_add(1).expect("Label IDs overflowed"));
+
+                label_id
+            },
         }
     }
 
@@ -164,11 +162,11 @@ impl Assembler {
         self.operand_size = size;
     }
 
-    pub fn label(&mut self, name: &str) {
-        let label_id = self.allocate_label(name);
+    pub fn label(&mut self, label: &str) {
+        let label_id = self.label_to_id(label);
 
         assert!(self.labels.insert(label_id, self.current_offset()).is_none(),
-            "Label {} was already assigned.", name);
+            "Label {} was already assigned.", label);
     }
 
     pub fn into_relocated_code(mut self) -> Vec<u8> {
