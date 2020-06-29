@@ -164,12 +164,16 @@ impl Assembler {
     }
 
     fn relocate(&mut self) {
-        for (target, offset, size) in &self.relocations {
+        for (label, offset, size) in &self.relocations {
             use std::convert::TryInto;
 
-            let target = *self.labels.get(target).expect("Non-existant label was referenced.");
+            let target = match self.labels.get(label) {
+                Some(target) => target,
+                None         => panic!("Non-existent label {} was referenced.", label),
+            };
+
             let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
-                .try_into().expect("Target is too far.");
+                .try_into().expect("Cannot relocate, target is too far for rel32.");
 
             let write_offset = *offset + *size - 4;
             self.bytes[write_offset..write_offset + 4].copy_from_slice(&rel32.to_le_bytes());
@@ -242,14 +246,14 @@ impl Assembler {
     }
 
     fn encode_rel32(&mut self, rel: i32, label: Option<&str>, op: &Opcode, encoding: &Encoding) {
-        let size_before = self.bytes.len();
+        let offset_before = self.current_offset();
 
         self.encode_imm(rel as i64, 4, op, encoding);
 
         if let Some(label) = label {
-            let inst_size = self.bytes.len() - size_before;
+            let inst_size = self.current_offset() - offset_before;
 
-            self.relocations.push((label.to_string(), size_before, inst_size));
+            self.relocations.push((label.to_string(), offset_before, inst_size));
         }
     }
 

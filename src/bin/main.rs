@@ -64,6 +64,9 @@ fn main() {
 
     asm.call(&[Mem(Some(Rdx), None, 1)]);
 
+    asm.movsx(&[Reg(Rax), Reg(Rax)]);
+    asm.movsxd(&[Reg(Rax), Reg(Rax)]);
+
     disasm(&mut asm);
 }
 
