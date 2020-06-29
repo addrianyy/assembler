@@ -154,6 +154,10 @@ impl Assembler {
         self.push_code(instruction);
     }
 
+    pub fn current_offset(&self) -> usize {
+        self.bytes.len()
+    }
+
     fn require_64bit(&self) {
         assert!(self.operand_size == OperandSize::Bits64,
             "This operation requires 64 bit operand size.");
