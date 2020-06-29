@@ -154,7 +154,7 @@ impl Assembler {
                     .checked_add(1).expect("Label IDs overflowed"));
 
                 label_id
-            },
+            }
         }
     }
 
@@ -203,8 +203,8 @@ impl Assembler {
                 Some(target) => target,
                 None         => {
                     for (name, label_id) in self.label_to_id.iter() {
-                        if label_id == label_id {
-                            panic!("Non-existent label {} was referenced.", name)
+                        if label == label_id {
+                            panic!("Non-existent label {} was referenced.", name);
                         }
                     }
 
