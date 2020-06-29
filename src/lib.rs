@@ -111,11 +111,16 @@ struct Encoding {
     standalone: Option<Opcode>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct LabelID(usize);
+
 pub struct Assembler {
-    bytes:        Vec<u8>,
-    relocations:  Vec<(String, usize, usize)>,
-    labels:       HashMap<String, usize>,
-    operand_size: OperandSize,
+    bytes:              Vec<u8>,
+    operand_size:       OperandSize,
+    labels:             HashMap<LabelID, usize>,
+    relocations:        Vec<(LabelID, usize, usize)>,
+    label_to_id:        HashMap<String, LabelID>,
+    next_free_label_id: LabelID,
 }
 
 impl Default for Assembler {
@@ -127,10 +132,31 @@ impl Default for Assembler {
 impl Assembler {
     pub fn new() -> Self {
         Self {
-            bytes:        Vec::new(),
-            relocations:  Vec::new(),
-            labels:       HashMap::new(),
-            operand_size: OperandSize::Bits64,
+            bytes:              Vec::new(),
+            operand_size:       OperandSize::Bits64,
+            labels:             HashMap::new(),
+            relocations:        Vec::new(),
+            label_to_id:        HashMap::new(),
+            next_free_label_id: LabelID(0),
+        }
+    }
+
+    fn allocate_label(&mut self, name: &str) -> LabelID {
+        let label_id = self.next_free_label_id;
+
+        assert!(self.label_to_id.insert(name.to_string(), label_id).is_none(),
+            "Label {} was already created.", name);
+
+        self.next_free_label_id = LabelID(label_id.0
+            .checked_add(1).expect("Label IDs overflowed"));
+
+        label_id
+    }
+
+    fn label_to_id(&mut self, label: &str) -> LabelID {
+        match self.label_to_id.get(label) {
+            Some(label_id) => *label_id,
+            None           => self.allocate_label(label),
         }
     }
 
@@ -139,8 +165,10 @@ impl Assembler {
     }
 
     pub fn label(&mut self, name: &str) {
-        assert!(self.labels.insert(name.to_string(), self.bytes.len()).is_none(),
-            "Label {} was already allocated.", name);
+        let label_id = self.allocate_label(name);
+
+        assert!(self.labels.insert(label_id, self.current_offset()).is_none(),
+            "Label {} was already assigned.", name);
     }
 
     pub fn into_relocated_code(mut self) -> Vec<u8> {
@@ -175,7 +203,15 @@ impl Assembler {
 
             let target = match self.labels.get(label) {
                 Some(target) => target,
-                None         => panic!("Non-existent label {} was referenced.", label),
+                None         => {
+                    for (name, label_id) in self.label_to_id.iter() {
+                        if label_id == label_id {
+                            panic!("Non-existent label {} was referenced.", name)
+                        }
+                    }
+
+                    unreachable!()
+                }
             };
 
             let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
@@ -258,8 +294,9 @@ impl Assembler {
 
         if let Some(label) = label {
             let inst_size = self.current_offset() - offset_before;
+            let label_id  = self.label_to_id(label);
 
-            self.relocations.push((label.to_string(), offset_before, inst_size));
+            self.relocations.push((label_id, offset_before, inst_size));
         }
     }
 
