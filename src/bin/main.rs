@@ -1,4 +1,3 @@
-mod asm;
 use asm::Operand::{Imm, Mem, Reg, Rel, Label};
 use asm::Reg::*;
 use asm::Assembler;
@@ -18,7 +17,7 @@ fn main() {
 
     asm.label("SS");
     asm.cmp(&[Reg(R15), Mem(Some(Rcx), None, 0xcc)]);
-    //asm.mov(&[Reg(R13), Imm(i64::MAX)]);
+    asm.mov(&[Reg(Rsp), Imm(i64::MAX)]);
     asm.cmp(&[Reg(R10), Reg(Rcx)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Reg(R12)]);
     asm.cmp(&[Mem(Some(Rcx), None, 0xcc), Imm(0x1337)]);
@@ -27,6 +26,7 @@ fn main() {
     asm.shr(&[Reg(R8), Reg(Rcx)]);
 
     asm.jmp(&[Rel(0x10)]);
+    asm.raw_instruction(b"\xcc");
     //asm.pop(&[Mem(Some(Rax), None, 0)]);
     asm.jz(&[Label("SS")]);
 
@@ -62,13 +62,13 @@ fn main() {
     asm.neg(&[Reg(R14)]);
     asm.not(&[Mem(Some(Rcx), None, 0)]);
 
-    asm.relocate();
+    asm.call(&[Mem(Some(Rdx), None, 1)]);
 
-    disasm(&asm);
+    disasm(&mut asm);
 }
 
-fn disasm(asm: &Assembler) {
-    std::fs::write("assembly.bin", asm.bytes())
+fn disasm(asm: &mut Assembler) {
+    std::fs::write("assembly.bin", asm.relocated_code())
         .expect("Failed to write assembly.bin");
 
     std::process::Command::new("ndisasm")

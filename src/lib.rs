@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod instructions;
 use std::collections::HashMap;
 
@@ -48,7 +46,7 @@ impl Reg {
 
 type MemOperand = (Option<Reg>, Option<(Reg, usize)>, i64);
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OperandSize {
     Bits64 = 64,
     Bits32 = 32,
@@ -65,10 +63,10 @@ pub enum Operand<'a> {
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum RexMode {
-    Unneeded,
+    ExplicitRequired,
     Implicit,
     Usable,
-    ExplicitRequired,
+    Unneeded,
 }
 
 #[derive(Copy, Clone)]
@@ -130,19 +128,54 @@ impl Assembler {
         }
     }
 
-    pub fn bytes(&self) -> &[u8] {
+    pub fn operand_size(&mut self, size: OperandSize) {
+        self.operand_size = size;
+    }
+
+    pub fn label(&mut self, name: &str) {
+        assert!(self.labels.insert(name.to_string(), self.bytes.len()).is_none(),
+            "Label {} was already allocated.", name);
+    }
+
+    pub fn into_relocated_code(mut self) -> Vec<u8> {
+        self.relocate();
+
+        self.bytes
+    }
+
+    pub fn relocated_code(&mut self) -> &[u8] {
+        self.relocate();
+        self.relocations.clear();
+
         &self.bytes
     }
 
-    pub fn operand_size(&mut self, size: OperandSize) {
-        self.operand_size = size;
+    pub fn raw_instruction(&mut self, instruction: &[u8]) {
+        self.push_code(instruction);
+    }
+
+    fn require_64bit(&self) {
+        assert!(self.operand_size == OperandSize::Bits64,
+            "This operation requires 64 bit operand size.");
+    }
+
+    fn relocate(&mut self) {
+        for (target, offset, size) in &self.relocations {
+            use std::convert::TryInto;
+
+            let target = *self.labels.get(target).expect("Non-existant label was referenced.");
+            let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
+                .try_into().expect("Target is too far.");
+
+            let write_offset = *offset + *size - 4;
+            self.bytes[write_offset..write_offset + 4].copy_from_slice(&rel32.to_le_bytes());
+        }
     }
 
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
             RexMode::Implicit | RexMode::ExplicitRequired => {
-                assert!(self.operand_size == OperandSize::Bits64,
-                        "This operation requires 64 bit operand size.");
+                self.require_64bit();
 
                 encoding.rex == RexMode::ExplicitRequired
             }
@@ -168,7 +201,7 @@ impl Assembler {
         self.rex(self.get_rexw(encoding), false, false, reg_e);
         self.push_code(&op.op);
         self.modrm(0b11, op.digit, reg_enc);
-        self.push_code(&imm.to_le_bytes()[..size]);
+        self.push_imm(imm, size);
     }
 
     fn encode_memreg_regmem(&mut self, reg: Reg, mem: MemOperand,
@@ -183,7 +216,7 @@ impl Assembler {
         op: &OpcodeDigit, encoding: &Encoding)
     {
         self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), &[], op.op, mem);
-        self.push_code(&imm.to_le_bytes()[..size]);
+        self.push_imm(imm, size);
     }
 
     fn encode_mem(&mut self, mem: MemOperand, op: &OpcodeDigit, encoding: &Encoding) {
@@ -201,7 +234,7 @@ impl Assembler {
     fn encode_imm(&mut self, imm: i64, size: usize, op: &Opcode, encoding: &Encoding) {
         self.rex(self.get_rexw(encoding), false, false, false);
         self.push_code(&op.op);
-        self.push_code(&imm.to_le_bytes()[..size]);
+        self.push_imm(imm, size);
     }
 
     fn encode_rel32(&mut self, rel: i32, label: Option<&str>, op: &Opcode, encoding: &Encoding) {
@@ -222,10 +255,9 @@ impl Assembler {
     }
 
     fn encode_regimm64(&mut self, reg: Reg, imm: i64, op: &OpcodeRegadd, _encoding: &Encoding) {
-        assert!(self.operand_size == OperandSize::Bits64,
-            "This operation requires 64 bit operand size.");
+        self.require_64bit();
 
-        assert!(op.op.len() == 1);
+        assert!(op.op.len() == 1, "Only 1 byte opcodes for r64, imm64 are now supported.");
 
         let (reg_e, reg_enc) = reg.encoding();
 
@@ -233,23 +265,13 @@ impl Assembler {
 
         self.rex(true, false, false, reg_e);
         self.push_code(&[op]);
-        self.push_code(&imm.to_le_bytes());
+        self.push_imm(imm, 8);
     }
 
     fn encode_instruction(&mut self, operands: &[Operand], encoding: &Encoding, name: &str) {
         macro_rules! fits_within {
             ($value: expr, $type: tt) => {
                 $value as i64 <= $type::MAX as i64 && $value as i64 >= $type::MIN as i64
-            }
-        }
-
-        macro_rules! fits_within_32se {
-            ($value: expr) => {
-                if self.operand_size == OperandSize::Bits32 {
-                    fits_within!($value, u32) || fits_within!($value, i32)
-                } else {
-                    fits_within!($value, i32)
-                }
             }
         }
 
@@ -283,20 +305,9 @@ impl Assembler {
                 self.encode_imm(imm, 2, encoding.uimm16.as_ref().unwrap(), encoding);
             }
             &[Operand::Imm(imm)]
-                if fits_within_32se!(imm) && encoding.imm32.is_some() =>
+                if fits_within!(imm, i32) && encoding.imm32.is_some() =>
             {
                 self.encode_imm(imm, 4, encoding.imm32.as_ref().unwrap(), encoding);
-            }
-            &[Operand::Reg(reg), Operand::Reg(Reg::Rcx)]
-                if encoding.regcl.is_some() =>
-            {
-                self.encode_reg(reg, encoding.regcl.as_ref().unwrap(), encoding);
-            }
-            &[Operand::Mem(base, index, disp), Operand::Reg(Reg::Rcx)]
-                if encoding.memcl.is_some() =>
-            {
-                self.encode_mem((base, index, disp),
-                    encoding.memcl.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg1), Operand::Reg(reg2)]
                 if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
@@ -323,12 +334,12 @@ impl Assembler {
                     encoding.memuimm8.as_ref().unwrap(), encoding);
             }
             &[Operand::Reg(reg), Operand::Imm(imm)]
-                if fits_within_32se!(imm) && encoding.regimm32.is_some() =>
+                if fits_within!(imm, i32) && encoding.regimm32.is_some() =>
             {
                 self.encode_regimm(reg, imm, 4, encoding.regimm32.as_ref().unwrap(), encoding);
             }
             &[Operand::Mem(base, index, disp), Operand::Imm(imm)]
-                if fits_within_32se!(imm) && encoding.memimm32.is_some() =>
+                if fits_within!(imm, i32) && encoding.memimm32.is_some() =>
             {
                 self.encode_memimm((base, index, disp),
                     imm, 4, encoding.memimm32.as_ref().unwrap(), encoding);
@@ -350,6 +361,16 @@ impl Assembler {
                 self.encode_memreg_regmem(reg, (base, index, disp),
                     encoding.memreg.as_ref().unwrap(), encoding);
             }
+            &[Operand::Reg(reg), Operand::Reg(Reg::Rcx)]
+                if encoding.regcl.is_some() =>
+            {
+                self.encode_reg(reg, encoding.regcl.as_ref().unwrap(), encoding);
+            }
+            &[Operand::Mem(base, index, disp), Operand::Reg(Reg::Rcx)]
+                if encoding.memcl.is_some() =>
+            {
+                self.encode_mem((base, index, disp), encoding.memcl.as_ref().unwrap(), encoding);
+            }
             _ => {
                 panic!("{:?} operand combination is unsupported for instruction {} \
                         with {} bit operand size.", operands, name,
@@ -360,6 +381,18 @@ impl Assembler {
 
     fn push_code(&mut self, bytes: &[u8]) {
         self.bytes.extend_from_slice(bytes);
+    }
+
+    fn push_imm(&mut self, imm: i64, size: usize) {
+        let bytes = &imm.to_le_bytes();
+
+        let all_0s = bytes[size..].iter().all(|x| *x == 0x00);
+        let all_fs = bytes[size..].iter().all(|x| *x == 0xff);
+
+        assert!(all_0s || all_fs,
+            "Truncation of imm {} to {} bytes will cause data loss.", imm, size);
+
+        self.push_code(&bytes[..size]);
     }
 
     fn rex(&mut self, w: bool, r: bool, x: bool, b: bool) {
@@ -516,24 +549,6 @@ impl Assembler {
                     self.push_code(&displacement.to_le_bytes());
                 }
             }
-        }
-    }
-
-    pub fn label(&mut self, name: &str) {
-        assert!(self.labels.insert(name.to_string(), self.bytes.len()).is_none(),
-            "Label {} was already allocated.", name);
-    }
-
-    pub fn relocate(&mut self) {
-        for (target, offset, size) in &self.relocations {
-            use std::convert::TryInto;
-
-            let target = *self.labels.get(target).expect("Non-existant label was referenced.");
-            let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
-                .try_into().expect("Target is too far.");
-
-            let write_offset = *offset + *size - 4;
-            self.bytes[write_offset..write_offset + 4].copy_from_slice(&rel32.to_le_bytes());
         }
     }
 }
