@@ -118,9 +118,15 @@ pub struct Assembler {
     operand_size: OperandSize,
 }
 
+impl Default for Assembler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Assembler {
-    pub fn new() -> Assembler {
-        Assembler {
+    pub fn new() -> Self {
+        Self {
             bytes:        Vec::new(),
             relocations:  Vec::new(),
             labels:       HashMap::new(),
@@ -283,41 +289,41 @@ impl Assembler {
             }
         }
 
-        match operands {
-            &[] if encoding.standalone.is_some() => {
+        match *operands {
+            [] if encoding.standalone.is_some() => {
                 self.encode_standalone(encoding.standalone.as_ref().unwrap(), encoding);
             }
-            &[Operand::Rel(rel)]
+            [Operand::Rel(rel)]
                 if encoding.rel32.is_some() =>
             {
                 self.encode_rel32(rel, None, encoding.rel32.as_ref().unwrap(), encoding);
             }
-            &[Operand::Label(label)]
+            [Operand::Label(label)]
                 if encoding.rel32.is_some() =>
             {
                 self.encode_rel32(0, Some(label), encoding.rel32.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg)]
+            [Operand::Reg(reg)]
                 if encoding.reg.is_some() =>
             {
                 self.encode_reg(reg, encoding.reg.as_ref().unwrap(), encoding);
             }
-            &[Operand::Mem(base, index, disp)]
+            [Operand::Mem(base, index, disp)]
                 if encoding.mem.is_some() =>
             {
                 self.encode_mem((base, index, disp), encoding.mem.as_ref().unwrap(), encoding);
             }
-            &[Operand::Imm(imm)]
+            [Operand::Imm(imm)]
                 if fits_within!(imm, u16) && encoding.uimm16.is_some() =>
             {
                 self.encode_imm(imm, 2, encoding.uimm16.as_ref().unwrap(), encoding);
             }
-            &[Operand::Imm(imm)]
+            [Operand::Imm(imm)]
                 if fits_within!(imm, i32) && encoding.imm32.is_some() =>
             {
                 self.encode_imm(imm, 4, encoding.imm32.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg1), Operand::Reg(reg2)]
+            [Operand::Reg(reg1), Operand::Reg(reg2)]
                 if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
             {
                 match (encoding.regreg, encoding.regreg_inv) {
@@ -330,51 +336,51 @@ impl Assembler {
                     _ => panic!("Regreg and inverted regreg both implemented for {}.", name),
                 }
             }
-            &[Operand::Reg(reg), Operand::Imm(imm)]
+            [Operand::Reg(reg), Operand::Imm(imm)]
                 if fits_within!(imm, u8) && encoding.reguimm8.is_some() =>
             {
                 self.encode_regimm(reg, imm, 1, encoding.reguimm8.as_ref().unwrap(), encoding);
             }
-            &[Operand::Mem(base, index, disp), Operand::Imm(imm)]
+            [Operand::Mem(base, index, disp), Operand::Imm(imm)]
                 if fits_within!(imm, u8) && encoding.memuimm8.is_some() =>
             {
                 self.encode_memimm((base, index, disp), imm, 1,
                     encoding.memuimm8.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg), Operand::Imm(imm)]
+            [Operand::Reg(reg), Operand::Imm(imm)]
                 if fits_within!(imm, i32) && encoding.regimm32.is_some() =>
             {
                 self.encode_regimm(reg, imm, 4, encoding.regimm32.as_ref().unwrap(), encoding);
             }
-            &[Operand::Mem(base, index, disp), Operand::Imm(imm)]
+            [Operand::Mem(base, index, disp), Operand::Imm(imm)]
                 if fits_within!(imm, i32) && encoding.memimm32.is_some() =>
             {
                 self.encode_memimm((base, index, disp),
                     imm, 4, encoding.memimm32.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg), Operand::Imm(imm)]
+            [Operand::Reg(reg), Operand::Imm(imm)]
                 if encoding.regimm64.is_some() =>
             {
                 self.encode_regimm64(reg, imm, encoding.regimm64.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg), Operand::Mem(base, index, disp)]
+            [Operand::Reg(reg), Operand::Mem(base, index, disp)]
                 if encoding.regmem.is_some() =>
             {
                 self.encode_memreg_regmem(reg, (base, index, disp),
                     encoding.regmem.as_ref().unwrap(), encoding);
             }
-            &[Operand::Mem(base, index, disp), Operand::Reg(reg)]
+            [Operand::Mem(base, index, disp), Operand::Reg(reg)]
                 if encoding.memreg.is_some() =>
             {
                 self.encode_memreg_regmem(reg, (base, index, disp),
                     encoding.memreg.as_ref().unwrap(), encoding);
             }
-            &[Operand::Reg(reg), Operand::Reg(Reg::Rcx)]
+            [Operand::Reg(reg), Operand::Reg(Reg::Rcx)]
                 if encoding.regcl.is_some() =>
             {
                 self.encode_reg(reg, encoding.regcl.as_ref().unwrap(), encoding);
             }
-            &[Operand::Mem(base, index, disp), Operand::Reg(Reg::Rcx)]
+            [Operand::Mem(base, index, disp), Operand::Reg(Reg::Rcx)]
                 if encoding.memcl.is_some() =>
             {
                 self.encode_mem((base, index, disp), encoding.memcl.as_ref().unwrap(), encoding);
