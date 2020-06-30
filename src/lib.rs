@@ -552,11 +552,16 @@ impl Assembler {
             assert!(!index_no_base);
 
             if has_displacement {
-                let displacement = mem.2.unwrap() as u32;
+                let displacement = mem.2.unwrap() as i32;
 
                 if has_base {
-                    self.modrm(0b10, regop, mem.0.unwrap().encoding().1);
-                    self.push_code(&displacement.to_le_bytes());
+                    if byte_displacement {
+                        self.modrm(0b01, regop, mem.0.unwrap().encoding().1);
+                        self.push_code(&(displacement as i8).to_le_bytes());
+                    } else {
+                        self.modrm(0b10, regop, mem.0.unwrap().encoding().1);
+                        self.push_code(&displacement.to_le_bytes());
+                    }
                 } else {
                     self.modrm(0b00, regop, RM_SIB);
                     self.sib(0b101, 0b100, 0);
@@ -590,10 +595,10 @@ impl Assembler {
             self.sib(base.encoding().1, index.0.encoding().1, scale);
 
             if has_displacement {
-                let displacement = mem.2.unwrap() as u32;
+                let displacement = mem.2.unwrap() as i32;
 
                 if byte_displacement && !index_no_base {
-                    self.push_code(&(displacement as u8).to_le_bytes());
+                    self.push_code(&(displacement as i8).to_le_bytes());
                 } else {
                     self.push_code(&displacement.to_le_bytes());
                 }
