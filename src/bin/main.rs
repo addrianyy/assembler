@@ -65,6 +65,23 @@ fn main() {
     asm.movsx(&[Reg(Rax), Reg(Rax)]);
     asm.movsxd(&[Reg(Rax), Reg(Rax)]);
 
+    asm.mov(&[Mem(Some(Rdx), Some((Rax, 2)), 0x10), Reg(Rcx)]);
+
+    for i in 0..1 {
+        asm.mov(&[Reg(Rax), Reg(Rdx)]);
+        asm.shr(&[Reg(Rax), Imm(16 + 9 * i)]);
+        asm.and(&[Reg(Rax), Imm(0x1ff)]);
+        asm.mov(&[Reg(Rcx), Mem(Some(Rcx), Some((Rax, 8)), 0)]);
+        asm.test(&[Reg(Rcx), Reg(Rcx)]);
+        asm.jz(&[Label("access_fault")]);
+    }
+
+    asm.mov(&[Reg(Rax), Reg(Rcx)]);
+    asm.ret(&[]);
+
+    asm.label("access_fault");
+    asm.int3(&[]);
+
     disasm(&mut asm);
 }
 
