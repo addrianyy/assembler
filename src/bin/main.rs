@@ -5,7 +5,13 @@ use asm::Assembler;
 fn main() {
     let mut asm = Assembler::new();
 
+    asm.operand_size(asm::OperandSize::Bits32);
+    //asm.mov(&[Mem(Some(Rax), None, 0), Reg(Rcx)]);
+
+    asm.movzx(&[Reg(Rax), Mem(Some(Rax), None, 0)]);
+
     asm.operand_size(asm::OperandSize::Bits16);
+
 
     //asm.movzx(&[Reg(Rcx), Reg(Rdx)]);
     //asm.movzx(&[Reg(Rcx), Mem(Some(Rdx), None, 0)]);
