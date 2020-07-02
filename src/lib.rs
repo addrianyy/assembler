@@ -1,6 +1,8 @@
 mod instructions;
 use std::collections::HashMap;
 
+const MOD_DIRECT: u8 = 0b11;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Reg {
     Rax,
@@ -50,6 +52,7 @@ type MemOperand = (Option<Reg>, Option<(Reg, usize)>, i64);
 pub enum OperandSize {
     Bits64 = 64,
     Bits32 = 32,
+    Bits16 = 16,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -65,6 +68,13 @@ pub enum Operand<'a> {
 enum RexMode {
     ExplicitRequired,
     Implicit,
+    Usable,
+    Unneeded,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Prefix66Mode {
+    Unusable,
     Usable,
     Unneeded,
 }
@@ -87,6 +97,7 @@ struct OpcodeRegadd {
 
 struct Encoding {
     rex:        RexMode,
+    p66:        Prefix66Mode,
 
     // r64, r/m64
     regreg:     Option<Opcode>,
@@ -117,8 +128,10 @@ struct LabelID(usize);
 pub struct Assembler {
     bytes:              Vec<u8>,
     operand_size:       OperandSize,
+
     labels:             HashMap<LabelID, usize>,
     relocations:        Vec<(LabelID, usize, usize)>,
+
     label_to_id:        HashMap<String, LabelID>,
     next_free_label_id: LabelID,
 }
@@ -131,14 +144,50 @@ impl Default for Assembler {
 
 impl Assembler {
     pub fn new() -> Self {
+        Self::with_operand_size(OperandSize::Bits64)
+    }
+
+    pub fn with_operand_size(operand_size: OperandSize) -> Self {
         Self {
+            operand_size,
             bytes:              Vec::new(),
-            operand_size:       OperandSize::Bits64,
             labels:             HashMap::new(),
             relocations:        Vec::new(),
             label_to_id:        HashMap::new(),
             next_free_label_id: LabelID(0),
         }
+    }
+
+    pub fn operand_size(&mut self, size: OperandSize) {
+        self.operand_size = size;
+    }
+
+    pub fn label(&mut self, label: &str) {
+        let label_id = self.label_to_id(label);
+
+        assert!(self.labels.insert(label_id, self.current_offset()).is_none(),
+            "Label {} was already assigned.", label);
+    }
+
+    pub fn into_bytes(mut self) -> Vec<u8> {
+        self.relocate();
+
+        self.bytes
+    }
+
+    pub fn bytes(&mut self) -> &[u8] {
+        self.relocate();
+        self.relocations.clear();
+
+        &self.bytes
+    }
+
+    pub fn current_offset(&self) -> usize {
+        self.bytes.len()
+    }
+
+    pub fn raw_instruction(&mut self, instruction: &[u8]) {
+        self.push_code(instruction);
     }
 
     fn label_to_id(&mut self, label: &str) -> LabelID {
@@ -156,43 +205,6 @@ impl Assembler {
                 label_id
             }
         }
-    }
-
-    pub fn operand_size(&mut self, size: OperandSize) {
-        self.operand_size = size;
-    }
-
-    pub fn label(&mut self, label: &str) {
-        let label_id = self.label_to_id(label);
-
-        assert!(self.labels.insert(label_id, self.current_offset()).is_none(),
-            "Label {} was already assigned.", label);
-    }
-
-    pub fn into_relocated_code(mut self) -> Vec<u8> {
-        self.relocate();
-
-        self.bytes
-    }
-
-    pub fn relocated_code(&mut self) -> &[u8] {
-        self.relocate();
-        self.relocations.clear();
-
-        &self.bytes
-    }
-
-    pub fn raw_instruction(&mut self, instruction: &[u8]) {
-        self.push_code(instruction);
-    }
-
-    pub fn current_offset(&self) -> usize {
-        self.bytes.len()
-    }
-
-    fn require_64bit(&self) {
-        assert!(self.operand_size == OperandSize::Bits64,
-            "This operation requires 64 bit operand size.");
     }
 
     fn relocate(&mut self) {
@@ -220,15 +232,42 @@ impl Assembler {
         }
     }
 
+    fn require_64bit(&self) {
+        assert!(self.operand_size == OperandSize::Bits64,
+            "This operation cannot be done with {} bit operand size.", self.operand_size as usize);
+    }
+
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
-            RexMode::Implicit | RexMode::ExplicitRequired => {
-                self.require_64bit();
+            RexMode::Implicit => {
+                if self.operand_size == OperandSize::Bits16 &&
+                    encoding.p66 == Prefix66Mode::Usable {
+                    return false;
+                }
 
-                encoding.rex == RexMode::ExplicitRequired
+                self.require_64bit();
+                false
+            }
+            RexMode::ExplicitRequired => {
+                self.require_64bit();
+                true
             }
             RexMode::Usable   => self.operand_size == OperandSize::Bits64,
             RexMode::Unneeded => false,
+        }
+    }
+
+    fn push_66(&mut self, encoding: &Encoding) {
+        if self.operand_size == OperandSize::Bits16 {
+            match encoding.p66 {
+                Prefix66Mode::Unneeded => (),
+                Prefix66Mode::Unusable => {
+                    panic!("This operation cannot be done with 16 bit operand size.");
+                }
+                Prefix66Mode::Usable => {
+                    self.push_code(&[0x66]);
+                }
+            }
         }
     }
 
@@ -236,9 +275,10 @@ impl Assembler {
         let (reg1_e, reg1_enc) = reg1.encoding();
         let (reg2_e, reg2_enc) = reg2.encoding();
 
+        self.push_66(encoding);
         self.rex(self.get_rexw(encoding), reg1_e, false, reg2_e);
         self.push_code(&op.op);
-        self.modrm(0b11, reg1_enc, reg2_enc);
+        self.modrm(MOD_DIRECT, reg1_enc, reg2_enc);
     }
 
     fn encode_regimm(&mut self, reg: Reg, imm: i64, size: usize,
@@ -246,9 +286,10 @@ impl Assembler {
     {
         let (reg_e, reg_enc) = reg.encoding();
 
+        self.push_66(encoding);
         self.rex(self.get_rexw(encoding), false, false, reg_e);
         self.push_code(&op.op);
-        self.modrm(0b11, op.digit, reg_enc);
+        self.modrm(MOD_DIRECT, op.digit, reg_enc);
         self.push_imm(imm, size);
     }
 
@@ -257,40 +298,56 @@ impl Assembler {
     {
         let (reg_e, reg_enc) = reg.encoding();
 
-        self.encode_memory_operand(reg_enc, reg_e, self.get_rexw(encoding), &[], op.op, mem)
+        self.push_66(encoding);
+        self.encode_memory_operand(reg_enc, reg_e, self.get_rexw(encoding), op.op, mem)
     }
 
     fn encode_memimm(&mut self, mem: MemOperand, imm: i64, size: usize,
         op: &OpcodeDigit, encoding: &Encoding)
     {
-        self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), &[], op.op, mem);
+        self.push_66(encoding);
+        self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), op.op, mem);
         self.push_imm(imm, size);
     }
 
     fn encode_mem(&mut self, mem: MemOperand, op: &OpcodeDigit, encoding: &Encoding) {
-        self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), &[], op.op, mem);
+        self.push_66(encoding);
+        self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), op.op, mem);
     }
 
     fn encode_reg(&mut self, reg: Reg, op: &OpcodeDigit, encoding: &Encoding) {
         let (reg_e, reg_enc) = reg.encoding();
 
+        self.push_66(encoding);
         self.rex(self.get_rexw(encoding), false, false, reg_e);
         self.push_code(&op.op);
-        self.modrm(0b11, op.digit, reg_enc);
+        self.modrm(MOD_DIRECT, op.digit, reg_enc);
     }
 
     fn encode_imm(&mut self, imm: i64, size: usize, op: &Opcode, encoding: &Encoding) {
+        self.push_66(encoding);
         self.rex(self.get_rexw(encoding), false, false, false);
         self.push_code(&op.op);
         self.push_imm(imm, size);
     }
 
+    fn encode_standalone(&mut self, op: &Opcode, encoding: &Encoding) {
+        self.push_66(encoding);
+        self.rex(self.get_rexw(encoding), false, false, false);
+        self.push_code(&op.op);
+    }
+
     fn encode_rel32(&mut self, rel: i32, label: Option<&str>, op: &Opcode, encoding: &Encoding) {
+        assert!(encoding.rex == RexMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
+            "Relative jumps/calls should not need REX or 66 prefix.");
+
         let offset_before = self.current_offset();
 
         self.encode_imm(rel as i64, 4, op, encoding);
 
         if let Some(label) = label {
+            assert!(rel == 0, "Target label was specified but relative offset was not 0.");
+
             let inst_size = self.current_offset() - offset_before;
             let label_id  = self.label_to_id(label);
 
@@ -298,15 +355,10 @@ impl Assembler {
         }
     }
 
-    fn encode_standalone(&mut self, op: &Opcode, encoding: &Encoding) {
-        self.rex(self.get_rexw(encoding), false, false, false);
-        self.push_code(&op.op);
-    }
-
     fn encode_regimm64(&mut self, reg: Reg, imm: i64, op: &OpcodeRegadd, _encoding: &Encoding) {
         self.require_64bit();
 
-        assert!(op.op.len() == 1, "Only 1 byte opcodes for r64, imm64 are now supported.");
+        assert!(op.op.len() == 1, "Only 1 byte opcodes for r64, imm64 are supported.");
 
         let (reg_e, reg_enc) = reg.encoding();
 
@@ -323,6 +375,22 @@ impl Assembler {
                 $value as i64 <= $type::MAX as i64 && $value as i64 >= $type::MIN as i64
             }
         }
+
+        // imm32s get truncated to 16 bits with 16 bit operand size.
+
+        macro_rules! fits_within_imm32 {
+            ($value: expr) => {
+                match self.operand_size {
+                    OperandSize::Bits16 => fits_within!($value, i16),
+                    _                   => fits_within!($value, i32),
+                }
+            }
+        }
+
+        let imm32_size = match self.operand_size {
+            OperandSize::Bits16 => 2,
+            _                   => 4,
+        };
 
         match *operands {
             [] if encoding.standalone.is_some() => {
@@ -354,9 +422,9 @@ impl Assembler {
                 self.encode_imm(imm, 2, encoding.uimm16.as_ref().unwrap(), encoding);
             }
             [Operand::Imm(imm)]
-                if fits_within!(imm, i32) && encoding.imm32.is_some() =>
+                if fits_within_imm32!(imm) && encoding.imm32.is_some() =>
             {
-                self.encode_imm(imm, 4, encoding.imm32.as_ref().unwrap(), encoding);
+                self.encode_imm(imm, imm32_size, encoding.imm32.as_ref().unwrap(), encoding);
             }
             [Operand::Reg(reg1), Operand::Reg(reg2)]
                 if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
@@ -383,15 +451,16 @@ impl Assembler {
                     encoding.memuimm8.as_ref().unwrap(), encoding);
             }
             [Operand::Reg(reg), Operand::Imm(imm)]
-                if fits_within!(imm, i32) && encoding.regimm32.is_some() =>
+                if fits_within_imm32!(imm) && encoding.regimm32.is_some() =>
             {
-                self.encode_regimm(reg, imm, 4, encoding.regimm32.as_ref().unwrap(), encoding);
+                self.encode_regimm(reg, imm, imm32_size,
+                    encoding.regimm32.as_ref().unwrap(), encoding);
             }
             [Operand::Mem(base, index, disp), Operand::Imm(imm)]
-                if fits_within!(imm, i32) && encoding.memimm32.is_some() =>
+                if fits_within_imm32!(imm) && encoding.memimm32.is_some() =>
             {
                 self.encode_memimm((base, index, disp),
-                    imm, 4, encoding.memimm32.as_ref().unwrap(), encoding);
+                    imm, imm32_size, encoding.memimm32.as_ref().unwrap(), encoding);
             }
             [Operand::Reg(reg), Operand::Imm(imm)]
                 if encoding.regimm64.is_some() =>
@@ -475,115 +544,136 @@ impl Assembler {
 
     fn encode_memory_operand(
         &mut self,
-        regop:    u8,
-        rex_r:    bool,
-        rex_w:    bool,
-        prefixes: &[u8],
-        opcode:   &[u8],
-        mem:      MemOperand,
+        regop:  u8,
+        rex_r:  bool,
+        rex_w:  bool,
+        opcode: &[u8],
+        mem:    MemOperand,
     ) {
         let mut require_sib = false;
-        let mut has_base    = false;
 
         const RM_SIB:  u8 = 0b100;
         const RM_DISP: u8 = 0b101;
 
         let mut mem = if mem.2 == 0 { (mem.0, mem.1, None) } else { (mem.0, mem.1, Some(mem.2)) };
+
+        // Set if operand contains index register but not base one, that requires special handling.
         let mut index_no_base = false;
 
         if let Some(base) = mem.0 {
-            has_base = true;
-
             let encoding = base.encoding().1;
 
+            // SIB is required to encode RSP or R12 as a base register.
             if encoding == RM_SIB {
                 require_sib = true;
             }
 
+            // Displacement is required to encode RBP or R13 as a base register.
             if encoding == RM_DISP && mem.2.is_none() {
                 mem.2 = Some(0);
             }
         } else {
+            // There must be at least one component in memory operand.
             assert!(mem.1.is_some() || mem.2.is_some(), "Memory operand is empty.");
 
             if mem.1.is_some() {
                 index_no_base = true;
 
+                // Displacement is required to encode memory operand with index register but
+                // without base one.
                 if mem.2.is_none() {
                     mem.2 = Some(0);
                 }
 
+                // Base register RBP will be ignored if MODRM.MOD == 0.
                 mem.0 = Some(Reg::Rbp);
             }
         }
 
         if let Some((index, _)) = mem.1 {
-            assert!(index != Reg::Rsp, "Rsp cannot be used as an index.");
+            // Special case: R12 can be used as an index register even though it has
+            // the same 3-bit encoding as RSP (which cannot).
+            assert!(index != Reg::Rsp, "RSP cannot be used as an index register.");
+
             require_sib = true;
         }
 
         let mut byte_displacement = false;
 
         if let Some(displacement) = mem.2 {
+            // Displacement must fit in 32 bit signed integer.
             if !(displacement >= i32::MIN as i64 && displacement <= i32::MAX as i64) {
                 panic!("Displacement {} is too big.", displacement);
             }
 
+            // It is possible to use 1 byte displacement if it fits in 8 bit signed integer.
             if displacement >= i8::MIN as i64 && displacement <= i8::MAX as i64 {
                 byte_displacement = true;
             }
         }
 
+        // If registers are not present they don't need extension in RAX by default.
         let rex_b = mem.0.map(|reg| reg.encoding().0).unwrap_or(false);
         let rex_x = mem.1.map(|reg| reg.0.encoding().0).unwrap_or(false);
 
-        for &prefix in prefixes {
-            let is_rex = prefix & (0b1111 << 4) == (0b0100 << 4);
-            assert!(!is_rex, "REX prefix is already included in prefix table.");
-        }
-
-        self.push_code(prefixes);
         self.rex(rex_w, rex_r, rex_x, rex_b);
         self.push_code(opcode);
 
+        let has_base         = mem.0.is_some();
         let has_displacement = mem.2.is_some();
 
         if !require_sib {
-            assert!(!index_no_base);
+            assert!(!index_no_base, "There cannot be index register if SIB is not required.");
 
             if has_displacement {
                 let displacement = mem.2.unwrap() as i32;
 
                 if has_base {
+                    let base_encoding = mem.0.unwrap().encoding().1;
+
                     if byte_displacement {
-                        self.modrm(0b01, regop, mem.0.unwrap().encoding().1);
+                        // Encode base register and 8 bit displacement (without SIB).
+                        self.modrm(0b01, regop, base_encoding);
                         self.push_code(&(displacement as i8).to_le_bytes());
                     } else {
-                        self.modrm(0b10, regop, mem.0.unwrap().encoding().1);
+                        // Encode base register and 32 bit displacement (without SIB).
+                        self.modrm(0b10, regop, base_encoding);
                         self.push_code(&displacement.to_le_bytes());
                     }
                 } else {
+                    // In 64 bit mode the only way to encode displacement-only operand is to use
+                    // SIB byte with these special values. Displacement must be 32 bit wide.
+                    // Encoding without SIB is RIP-relative.
                     self.modrm(0b00, regop, RM_SIB);
                     self.sib(0b101, 0b100, 0);
                     self.push_code(&displacement.to_le_bytes());
                 }
             } else {
+                // Simple case: we just need to encode base register.
                 self.modrm(0b00, regop, mem.0.unwrap().encoding().1);
             }
         } else {
             if has_displacement && !index_no_base {
+                // Pick the shortest possible displacement encoding.
                 if byte_displacement {
                     self.modrm(0b01, regop, RM_SIB);
                 } else {
                     self.modrm(0b10, regop, RM_SIB);
                 }
             } else {
+                // No displacement is needed or index_no_base is true. In that case
+                // base will be RBP and 32-bit displacement still will be required.
                 self.modrm(0b00, regop, RM_SIB);
             }
 
-            let base  = mem.0.unwrap();
+            // If index_no_base is set then MODRM.MOD == 00 and base register == RBP
+            // so base register will be ignored.
+            let base = mem.0.unwrap();
+
+            // RSP encoding means no index (scale is ignored then).
             let index = mem.1.unwrap_or((Reg::Rsp, 1));
 
+            // Convert user-friendly scale to x86 one.
             let scale = match index.1 {
                 1 => 0,
                 2 => 1,
@@ -597,6 +687,8 @@ impl Assembler {
             if has_displacement {
                 let displacement = mem.2.unwrap() as i32;
 
+                // Encode displacement using 8 bit version if possible.
+                // If no base register was specified displacement is forced to be 32-bit wide.
                 if byte_displacement && !index_no_base {
                     self.push_code(&(displacement as i8).to_le_bytes());
                 } else {
