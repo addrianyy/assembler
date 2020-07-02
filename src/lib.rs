@@ -79,18 +79,15 @@ enum Prefix66Mode {
     Unneeded,
 }
 
-#[derive(Copy, Clone)]
 struct Opcode {
     op: &'static [u8],
 }
 
-#[derive(Copy, Clone)]
 struct OpcodeDigit {
     op:    &'static [u8],
     digit: u8,
 }
 
-#[derive(Copy, Clone)]
 struct OpcodeRegadd {
     op: &'static [u8],
 }
@@ -429,12 +426,12 @@ impl Assembler {
             [Operand::Reg(reg1), Operand::Reg(reg2)]
                 if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
             {
-                match (encoding.regreg, encoding.regreg_inv) {
+                match (encoding.regreg.as_ref(), encoding.regreg_inv.as_ref()) {
                     (Some(regreg), None) => {
-                        self.encode_regreg(reg1, reg2, &regreg, encoding);
+                        self.encode_regreg(reg1, reg2, regreg, encoding);
                     }
                     (None, Some(regreg_inv)) => {
-                        self.encode_regreg(reg2, reg1, &regreg_inv, encoding);
+                        self.encode_regreg(reg2, reg1, regreg_inv, encoding);
                     }
                     _ => panic!("Regreg and inverted regreg both implemented for {}.", name),
                 }
