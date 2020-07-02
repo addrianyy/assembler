@@ -13,6 +13,7 @@ fn main() {
 
     asm.operand_size(asm::OperandSize::Bits16);
 
+    asm.mov(&[Mem(Some(R10), None, 0), Imm(0xccccu16 as i16 as i64)]);
 
     //asm.movzx(&[Reg(Rcx), Reg(Rdx)]);
     //asm.movzx(&[Reg(Rcx), Mem(Some(Rdx), None, 0)]);
@@ -95,17 +96,37 @@ fn main() {
     asm.label("access_fault");
     asm.int3(&[]);
 
-    disasm(&mut asm);
+    disasm(asm.bytes());
 }
 
-fn disasm(asm: &mut Assembler) {
-    std::fs::write("assembly.bin", asm.bytes())
-        .expect("Failed to write assembly.bin");
+fn disasm(bytes: &[u8]) {
+    use std::process::{Command, Stdio};
+    use std::io::Write;
 
-    std::process::Command::new("ndisasm")
-        .args(&["-b", "64", "assembly.bin"])
+    let mut process = Command::new("ndisasm")
+        .args(&["-b64", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .expect("Failed to run `ndisasm`.");
+
+    {
+        let stdin = process.stdin.as_mut()
+            .expect("Getting `ndisasm` stdin failed.");
+
+        stdin.write_all(bytes)
+            .expect("Writing to `ndisasm` stdin failed.");
+    }
+
+    let output = process.wait_with_output()
+        .expect("Waiting for `ndisasm` failed.");
+
+    println!("{}", String::from_utf8_lossy(&output.stdout).trim());
+
+    if !output.stderr.is_empty() {
+        println!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+
+    assert!(output.status.success(), "ndisasm` failed to disassemble bytes.");
 }
