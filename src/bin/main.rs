@@ -22,6 +22,7 @@ fn main() {
     //asm.raw_instruction(&[0x66]);
     asm.mov(&[Reg(R9), Imm(10)]);
     asm.mov(&[Reg(R8), Reg(R15)]);
+    asm.mov(&[Reg(R8), Reg(R15)]);
     asm.mov(&[Mem(Some(R15), Some((Rdx, 4)), 0), Imm(1337)]);
 
     asm.mov(&[Reg(R9), Mem(Some(R13), Some((Rcx, 4)), 0)]);
