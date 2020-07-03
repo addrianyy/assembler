@@ -113,7 +113,9 @@ conditional_instruction!(ja,   cmova,   0x87);
 conditional_instruction!(jae,  cmovae,  0x83);
 conditional_instruction!(jb,   cmovb,   0x82);
 conditional_instruction!(jbe,  cmovbe,  0x86);
+conditional_instruction!(jc,   cmovc,   0x82);
 conditional_instruction!(je,   cmove,   0x84);
+conditional_instruction!(jz,   cmovz,   0x84);
 conditional_instruction!(jg,   cmovg,   0x8f);
 conditional_instruction!(jge,  cmovge,  0x8d);
 conditional_instruction!(jl,   cmovl,   0x8c);
@@ -128,8 +130,15 @@ conditional_instruction!(jng,  cmovng,  0x8e);
 conditional_instruction!(jnge, cmovnge, 0x8c);
 conditional_instruction!(jnl,  cmovnl,  0x8d);
 conditional_instruction!(jnle, cmovnle, 0x8f);
+conditional_instruction!(jno,  cmovno,  0x81);
+conditional_instruction!(jnp,  cmovnp,  0x8b);
+conditional_instruction!(jns,  cmovns,  0x89);
 conditional_instruction!(jnz,  cmovnz,  0x85);
-conditional_instruction!(jz,   cmovz,   0x84);
+conditional_instruction!(jo,   cmovo,   0x80);
+conditional_instruction!(jp,   cmovp,   0x8a);
+conditional_instruction!(jpe,  cmovpe,  0x8a);
+conditional_instruction!(jpo,  cmovpo,  0x8b);
+conditional_instruction!(js,   cmovs,   0x88);
 
 make_instruction! {
     mov,
