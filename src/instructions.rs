@@ -140,6 +140,28 @@ conditional_instruction!(jpe,  cmovpe,  0x8a);
 conditional_instruction!(jpo,  cmovpo,  0x8b);
 conditional_instruction!(js,   cmovs,   0x88);
 
+macro_rules! bit_instruction {
+    ($name: ident, $regmem_reg_opcode: expr, $regmem_imm_digit: expr) => {
+        make_instruction! {
+            $name,
+            Encoding {
+                rex:        RexMode::Usable,
+                p66:        Prefix66Mode::Usable,
+                reguimm8:   Some(OpcodeDigit { op: &[0x0f, 0xba], digit: $regmem_imm_digit }),
+                memuimm8:   Some(OpcodeDigit { op: &[0x0f, 0xba], digit: $regmem_imm_digit }),
+                memreg:     Some(Opcode { op: &[0x0f, $regmem_reg_opcode] }),
+                regreg_inv: Some(Opcode { op: &[0x0f, $regmem_reg_opcode] }),
+                ..DEFAULT_ENCODING
+            }
+        }
+    }
+}
+
+bit_instruction!(bt,  0xa3, 4);
+bit_instruction!(btc, 0xbb, 7);
+bit_instruction!(btr, 0xb3, 6);
+bit_instruction!(bts, 0xab, 5);
+
 make_instruction! {
     mov,
     Encoding {
@@ -375,6 +397,26 @@ make_instruction! {
         rex:        RexMode::Unneeded,
         p66:        Prefix66Mode::Unneeded,
         standalone: Some(Opcode { op: &[0xcc] }),
+        ..DEFAULT_ENCODING
+    }
+}
+
+make_instruction! {
+    rdtsc,
+    Encoding {
+        rex:        RexMode::Unneeded,
+        p66:        Prefix66Mode::Unneeded,
+        standalone: Some(Opcode { op: &[0x0f, 0x31] }),
+        ..DEFAULT_ENCODING
+    }
+}
+
+make_instruction! {
+    nop,
+    Encoding {
+        rex:        RexMode::Unneeded,
+        p66:        Prefix66Mode::Unneeded,
+        standalone: Some(Opcode { op: &[0x90] }),
         ..DEFAULT_ENCODING
     }
 }

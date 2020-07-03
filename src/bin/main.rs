@@ -11,7 +11,7 @@ fn main() {
     asm.operand_size(asm::OperandSize::Bits32);
     asm.movzx(&[Reg(Rax), Mem(Some(Rax), None, 0)]);
 
-    asm.operand_size(asm::OperandSize::Bits16);
+    asm.operand_size(asm::OperandSize::Bits64);
 
     asm.mov(&[Mem(Some(R10), None, 0), Imm(0xccccu16 as i16 as i64)]);
 
@@ -95,6 +95,19 @@ fn main() {
 
     asm.label("access_fault");
     asm.int3(&[]);
+    asm.rdtsc(&[]);
+    asm.nop(&[]);
+
+    asm.btc(&[Reg(Rdx), Imm(7)]);
+    asm.btc(&[Mem(Some(Rdx), None, 0), Imm(7)]);
+
+    asm.btc(&[Reg(Rdx), Reg(R15)]);
+    asm.btc(&[Mem(Some(Rdx), None, 0), Reg(Rdi)]);
+
+    asm.bt(&[Reg(Rdx), Imm(7)]);
+    asm.bt(&[Mem(Some(Rdx), None, 0), Imm(7)]);
+    asm.bt(&[Reg(Rdx), Reg(R15)]);
+    asm.bt(&[Mem(Some(Rdx), None, 0), Reg(Rdi)]);
 
     disasm(asm.bytes());
 }
