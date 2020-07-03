@@ -7,6 +7,7 @@ fn main() {
 
     asm.operand_size(asm::OperandSize::Bits16);
     asm.mov(&[Mem(Some(Rax), None, 0), Reg(Rcx)]);
+    asm.push(&[Reg(R15)]);
 
     asm.operand_size(asm::OperandSize::Bits32);
     asm.movzx(&[Reg(Rax), Mem(Some(Rax), None, 0)]);
