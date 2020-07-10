@@ -222,7 +222,7 @@ impl Assembler {
             assert!(size > 4, "Internal error: instruction is too small to have rel32.");
 
             // target = offset + instruction_size + rel32
-            // rel32 = target - offset - instruction_size
+            // rel32  = target - offset - instruction_size
             let rel32: i32 = (target.wrapping_sub(offset).wrapping_sub(size) as i64)
                 .try_into().expect("Cannot relocate, target is too far for rel32.");
 
@@ -567,7 +567,7 @@ impl Assembler {
 
         let mut mem = if mem.2 == 0 { (mem.0, mem.1, None) } else { (mem.0, mem.1, Some(mem.2)) };
 
-        // Set if operand contains index register but not base one, that requires special handling.
+        // Set if operand contains index register but not base one. It requires special handling.
         let mut index_no_base = false;
 
         if let Some(base) = mem.0 {
@@ -589,7 +589,7 @@ impl Assembler {
             if mem.1.is_some() {
                 index_no_base = true;
 
-                // Displacement is required to encode memory operand with index register but
+                // 32 bit displacement is required to encode memory operand with index register but
                 // without base one.
                 if mem.2.is_none() {
                     mem.2 = Some(0);
