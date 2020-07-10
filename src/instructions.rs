@@ -214,12 +214,13 @@ make_instruction! {
 }
 
 make_instruction! {
-    ret,
+    jmp,
     Encoding {
-        rex:        RexMode::Unneeded,
-        p66:        Prefix66Mode::Unneeded,
-        uimm16:     Some(Opcode { op: &[0xc2] }),
-        standalone: Some(Opcode { op: &[0xc3] }),
+        rex:   RexMode::Unneeded,
+        p66:   Prefix66Mode::Unneeded,
+        rel32: Some(Opcode { op: &[0xe9] }),
+        reg:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
+        mem:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
         ..DEFAULT_ENCODING
     }
 }
@@ -237,13 +238,12 @@ make_instruction! {
 }
 
 make_instruction! {
-    jmp,
+    ret,
     Encoding {
-        rex:   RexMode::Unneeded,
-        p66:   Prefix66Mode::Unneeded,
-        rel32: Some(Opcode { op: &[0xe9] }),
-        reg:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
-        mem:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
+        rex:        RexMode::Unneeded,
+        p66:        Prefix66Mode::Unneeded,
+        uimm16:     Some(Opcode { op: &[0xc2] }),
+        standalone: Some(Opcode { op: &[0xc3] }),
         ..DEFAULT_ENCODING
     }
 }

@@ -111,6 +111,8 @@ fn main() {
     asm.bt(&[Reg(Rdx), Reg(R15)]);
     asm.bt(&[Mem(Some(Rdx), None, 0), Reg(Rdi)]);
 
+    //asm.jmp(&[Label("SSSSSS")]);
+
     disasm(asm.bytes());
 }
 

@@ -3,6 +3,61 @@ use std::collections::HashMap;
 
 const MOD_DIRECT: u8 = 0b11;
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum RexMode {
+    ExplicitRequired,
+    Implicit,
+    Usable,
+    Unneeded,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Prefix66Mode {
+    Unusable,
+    Usable,
+    Unneeded,
+}
+
+struct Opcode {
+    op: &'static [u8],
+}
+
+struct OpcodeDigit {
+    op:    &'static [u8],
+    digit: u8,
+}
+
+struct OpcodeRegadd {
+    op: &'static [u8],
+}
+
+struct Encoding {
+    rex:        RexMode,
+    p66:        Prefix66Mode,
+
+    /// r64, r/m64
+    regreg:     Option<Opcode>,
+
+    /// r/m64, r64
+    regreg_inv: Option<Opcode>,
+
+    regimm32:   Option<OpcodeDigit>,
+    memimm32:   Option<OpcodeDigit>,
+    reguimm8:   Option<OpcodeDigit>,
+    memuimm8:   Option<OpcodeDigit>,
+    regmem:     Option<Opcode>,
+    memreg:     Option<Opcode>,
+    regcl:      Option<OpcodeDigit>,
+    memcl:      Option<OpcodeDigit>,
+    reg:        Option<OpcodeDigit>,
+    mem:        Option<OpcodeDigit>,
+    rel32:      Option<Opcode>,
+    imm32:      Option<Opcode>,
+    uimm16:     Option<Opcode>,
+    regimm64:   Option<OpcodeRegadd>,
+    standalone: Option<Opcode>,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Reg {
     Rax,
@@ -49,13 +104,6 @@ impl Reg {
 type MemOperand = (Option<Reg>, Option<(Reg, usize)>, i64);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum OperandSize {
-    Bits64 = 64,
-    Bits32 = 32,
-    Bits16 = 16,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Operand<'a> {
     Reg(Reg),
     Imm(i64),
@@ -64,59 +112,11 @@ pub enum Operand<'a> {
     Label(&'a str),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum RexMode {
-    ExplicitRequired,
-    Implicit,
-    Usable,
-    Unneeded,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum Prefix66Mode {
-    Unusable,
-    Usable,
-    Unneeded,
-}
-
-struct Opcode {
-    op: &'static [u8],
-}
-
-struct OpcodeDigit {
-    op:    &'static [u8],
-    digit: u8,
-}
-
-struct OpcodeRegadd {
-    op: &'static [u8],
-}
-
-struct Encoding {
-    rex:        RexMode,
-    p66:        Prefix66Mode,
-
-    // r64, r/m64
-    regreg:     Option<Opcode>,
-
-    // r/m64, r64
-    regreg_inv: Option<Opcode>,
-
-    regimm32:   Option<OpcodeDigit>,
-    memimm32:   Option<OpcodeDigit>,
-    reguimm8:   Option<OpcodeDigit>,
-    memuimm8:   Option<OpcodeDigit>,
-    regmem:     Option<Opcode>,
-    memreg:     Option<Opcode>,
-    regcl:      Option<OpcodeDigit>,
-    memcl:      Option<OpcodeDigit>,
-    reg:        Option<OpcodeDigit>,
-    mem:        Option<OpcodeDigit>,
-    rel32:      Option<Opcode>,
-    imm32:      Option<Opcode>,
-    uimm16:     Option<Opcode>,
-    regimm64:   Option<OpcodeRegadd>,
-    standalone: Option<Opcode>,
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum OperandSize {
+    Bits64 = 64,
+    Bits32 = 32,
+    Bits16 = 16,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -194,7 +194,7 @@ impl Assembler {
                 let label_id = self.next_free_label_id;
 
                 assert!(self.label_to_id.insert(label.to_string(), label_id).is_none(),
-                    "Label {} was already created.", label);
+                    "Internal error: Label {} was already created.", label);
 
                 self.next_free_label_id = LabelID(label_id.0
                     .checked_add(1).expect("Label IDs overflowed"));
@@ -205,27 +205,32 @@ impl Assembler {
     }
 
     fn relocate(&mut self) {
-        for (label, offset, size) in &self.relocations {
+        for &(ref label, offset, size) in &self.relocations {
             use std::convert::TryInto;
 
             let target = match self.labels.get(label) {
                 Some(target) => target,
                 None         => {
-                    for (name, label_id) in self.label_to_id.iter() {
-                        if label == label_id {
-                            panic!("Non-existent label {} was referenced.", name);
-                        }
-                    }
+                    let name = self.label_to_id.iter()
+                        .find(|(_, label_id)| *label_id == label)
+                        .expect("Internal error: Unnamed label was referenced.").0;
 
-                    unreachable!()
+                    panic!("Non-existent label {} was referenced.", name);
                 }
             };
 
-            let rel32: i32 = (target.wrapping_sub(*offset).wrapping_sub(*size) as i64)
+            assert!(size > 4, "Internal error: instruction is too small to have rel32.");
+
+            // target = offset + instruction_size + rel32
+            // rel32 = target - offset - instruction_size
+            let rel32: i32 = (target.wrapping_sub(offset).wrapping_sub(size) as i64)
                 .try_into().expect("Cannot relocate, target is too far for rel32.");
 
-            let write_offset = *offset + *size - 4;
-            self.bytes[write_offset..write_offset + 4].copy_from_slice(&rel32.to_le_bytes());
+            // rel32 is always encoded in last 4 bytes of instruction.
+            let write_offset = offset + size - 4;
+
+            self.bytes[write_offset..write_offset + 4]
+                .copy_from_slice(&rel32.to_le_bytes());
         }
     }
 
@@ -237,8 +242,10 @@ impl Assembler {
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
             RexMode::Implicit => {
+                // Instructions with implicit REX.W can possibly be encoded with 16 bit operand
+                // size (but not 32).
                 if self.operand_size == OperandSize::Bits16 &&
-                    encoding.p66 == Prefix66Mode::Usable {
+                        encoding.p66 == Prefix66Mode::Usable {
                     return false;
                 }
 
@@ -254,7 +261,7 @@ impl Assembler {
         }
     }
 
-    fn push_66(&mut self, encoding: &Encoding) {
+    fn override_operand_size(&mut self, encoding: &Encoding) {
         if self.operand_size == OperandSize::Bits16 {
             match encoding.p66 {
                 Prefix66Mode::Unneeded => (),
@@ -272,7 +279,7 @@ impl Assembler {
         let (reg1_e, reg1_enc) = reg1.encoding();
         let (reg2_e, reg2_enc) = reg2.encoding();
 
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.rex(self.get_rexw(encoding), reg1_e, false, reg2_e);
         self.push_code(&op.op);
         self.modrm(MOD_DIRECT, reg1_enc, reg2_enc);
@@ -283,7 +290,7 @@ impl Assembler {
     {
         let (reg_e, reg_enc) = reg.encoding();
 
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.rex(self.get_rexw(encoding), false, false, reg_e);
         self.push_code(&op.op);
         self.modrm(MOD_DIRECT, op.digit, reg_enc);
@@ -295,41 +302,41 @@ impl Assembler {
     {
         let (reg_e, reg_enc) = reg.encoding();
 
-        self.push_66(encoding);
-        self.encode_memory_operand(reg_enc, reg_e, self.get_rexw(encoding), op.op, mem)
+        self.override_operand_size(encoding);
+        self.encode_memory_operand(reg_enc, reg_e, self.get_rexw(encoding), op.op, mem);
     }
 
     fn encode_memimm(&mut self, mem: MemOperand, imm: i64, size: usize,
         op: &OpcodeDigit, encoding: &Encoding)
     {
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), op.op, mem);
         self.push_imm(imm, size);
     }
 
     fn encode_mem(&mut self, mem: MemOperand, op: &OpcodeDigit, encoding: &Encoding) {
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), op.op, mem);
     }
 
     fn encode_reg(&mut self, reg: Reg, op: &OpcodeDigit, encoding: &Encoding) {
         let (reg_e, reg_enc) = reg.encoding();
 
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.rex(self.get_rexw(encoding), false, false, reg_e);
         self.push_code(&op.op);
         self.modrm(MOD_DIRECT, op.digit, reg_enc);
     }
 
     fn encode_imm(&mut self, imm: i64, size: usize, op: &Opcode, encoding: &Encoding) {
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.rex(self.get_rexw(encoding), false, false, false);
         self.push_code(&op.op);
         self.push_imm(imm, size);
     }
 
     fn encode_standalone(&mut self, op: &Opcode, encoding: &Encoding) {
-        self.push_66(encoding);
+        self.override_operand_size(encoding);
         self.rex(self.get_rexw(encoding), false, false, false);
         self.push_code(&op.op);
     }
@@ -426,6 +433,8 @@ impl Assembler {
             [Operand::Reg(reg1), Operand::Reg(reg2)]
                 if encoding.regreg.is_some() || encoding.regreg_inv.is_some() =>
             {
+                // If instruction encoding is r/m64, r64 we need to invert
+                // operand order.
                 match (encoding.regreg.as_ref(), encoding.regreg_inv.as_ref()) {
                     (Some(regreg), None) => {
                         self.encode_regreg(reg1, reg2, regreg, encoding);
@@ -501,6 +510,7 @@ impl Assembler {
     fn push_imm(&mut self, imm: i64, size: usize) {
         let bytes = &imm.to_le_bytes();
 
+        // Truncated part needs to be either all 0s (positive number) or all fs (negative number).
         let all_0s = bytes[size..].iter().all(|x| *x == 0x00);
         let all_fs = bytes[size..].iter().all(|x| *x == 0xff);
 
@@ -511,6 +521,9 @@ impl Assembler {
     }
 
     fn rex(&mut self, w: bool, r: bool, x: bool, b: bool) {
+        // REX without any attributes does not need to be emited because it doesn't change anyting.
+        // In 8 bit mode it makes it impossible to encode high registers (AH, CH, ..)
+        // but this assembler doesn't support 8 bit operand size anyway so we ignore that.
         if !w && !r && !x && !b {
             return;
         }
