@@ -6,6 +6,7 @@ const MOD_DIRECT: u8 = 0b11;
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum RexMode {
     ExplicitRequired,
+    SilentRequired,
     Implicit,
     Usable,
     Unneeded,
@@ -241,6 +242,9 @@ impl Assembler {
 
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
+            RexMode::SilentRequired => {
+                true
+            }
             RexMode::Implicit => {
                 // Instructions with implicit REX.W can possibly be encoded with 16 bit operand
                 // size (but not 32).

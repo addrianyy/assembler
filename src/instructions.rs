@@ -85,7 +85,7 @@ shift_instruction!(rol, 0);
 shift_instruction!(ror, 1);
 
 macro_rules! conditional_instruction {
-    ($jcc_name: ident, $cmov_name: ident, $code: expr) => {
+    ($jcc_name: ident, $cmov_name: ident, $setcc_name: ident, $code: expr) => {
         make_instruction! {
             $jcc_name,
             Encoding {
@@ -106,39 +106,50 @@ macro_rules! conditional_instruction {
                 ..DEFAULT_ENCODING
             }
         }
+
+        make_instruction! {
+            $setcc_name,
+            Encoding {
+                rex: RexMode::SilentRequired,
+                p66: Prefix66Mode::Unneeded,
+                reg: Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
+                mem: Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
+                ..DEFAULT_ENCODING
+            }
+        }
     }
 }
 
-conditional_instruction!(ja,   cmova,   0x87);
-conditional_instruction!(jae,  cmovae,  0x83);
-conditional_instruction!(jb,   cmovb,   0x82);
-conditional_instruction!(jbe,  cmovbe,  0x86);
-conditional_instruction!(jc,   cmovc,   0x82);
-conditional_instruction!(je,   cmove,   0x84);
-conditional_instruction!(jz,   cmovz,   0x84);
-conditional_instruction!(jg,   cmovg,   0x8f);
-conditional_instruction!(jge,  cmovge,  0x8d);
-conditional_instruction!(jl,   cmovl,   0x8c);
-conditional_instruction!(jle,  cmovle,  0x8e);
-conditional_instruction!(jna,  cmovna,  0x86);
-conditional_instruction!(jnae, cmovnae, 0x82);
-conditional_instruction!(jnb,  cmovnb,  0x83);
-conditional_instruction!(jnbe, cmovnbe, 0x87);
-conditional_instruction!(jnc,  cmovnc,  0x83);
-conditional_instruction!(jne,  cmovne,  0x85);
-conditional_instruction!(jng,  cmovng,  0x8e);
-conditional_instruction!(jnge, cmovnge, 0x8c);
-conditional_instruction!(jnl,  cmovnl,  0x8d);
-conditional_instruction!(jnle, cmovnle, 0x8f);
-conditional_instruction!(jno,  cmovno,  0x81);
-conditional_instruction!(jnp,  cmovnp,  0x8b);
-conditional_instruction!(jns,  cmovns,  0x89);
-conditional_instruction!(jnz,  cmovnz,  0x85);
-conditional_instruction!(jo,   cmovo,   0x80);
-conditional_instruction!(jp,   cmovp,   0x8a);
-conditional_instruction!(jpe,  cmovpe,  0x8a);
-conditional_instruction!(jpo,  cmovpo,  0x8b);
-conditional_instruction!(js,   cmovs,   0x88);
+conditional_instruction!(ja,   cmova,   seta,   0x87);
+conditional_instruction!(jae,  cmovae,  setae,  0x83);
+conditional_instruction!(jb,   cmovb,   setb,   0x82);
+conditional_instruction!(jbe,  cmovbe,  setbe,  0x86);
+conditional_instruction!(jc,   cmovc,   setc,   0x82);
+conditional_instruction!(je,   cmove,   sete,   0x84);
+conditional_instruction!(jz,   cmovz,   setz,   0x84);
+conditional_instruction!(jg,   cmovg,   setg,   0x8f);
+conditional_instruction!(jge,  cmovge,  setge,  0x8d);
+conditional_instruction!(jl,   cmovl,   setl,   0x8c);
+conditional_instruction!(jle,  cmovle,  setle,  0x8e);
+conditional_instruction!(jna,  cmovna,  setna,  0x86);
+conditional_instruction!(jnae, cmovnae, setnae, 0x82);
+conditional_instruction!(jnb,  cmovnb,  setnb,  0x83);
+conditional_instruction!(jnbe, cmovnbe, setnbe, 0x87);
+conditional_instruction!(jnc,  cmovnc,  setnc,  0x83);
+conditional_instruction!(jne,  cmovne,  setne,  0x85);
+conditional_instruction!(jng,  cmovng,  setng,  0x8e);
+conditional_instruction!(jnge, cmovnge, setnge, 0x8c);
+conditional_instruction!(jnl,  cmovnl,  setnl,  0x8d);
+conditional_instruction!(jnle, cmovnle, setnle, 0x8f);
+conditional_instruction!(jno,  cmovno,  setno,  0x81);
+conditional_instruction!(jnp,  cmovnp,  setnp,  0x8b);
+conditional_instruction!(jns,  cmovns,  setns,  0x89);
+conditional_instruction!(jnz,  cmovnz,  setnz,  0x85);
+conditional_instruction!(jo,   cmovo,   seto,   0x80);
+conditional_instruction!(jp,   cmovp,   setp,   0x8a);
+conditional_instruction!(jpe,  cmovpe,  setpe,  0x8a);
+conditional_instruction!(jpo,  cmovpo,  setpo,  0x8b);
+conditional_instruction!(js,   cmovs,   sets,   0x88);
 
 macro_rules! bit_instruction {
     ($name: ident, $regmem_reg_opcode: expr, $regmem_imm_digit: expr) => {
