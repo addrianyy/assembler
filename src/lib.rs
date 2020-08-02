@@ -130,11 +130,11 @@ pub struct Assembler {
 
     labels:             HashMap<LabelID, usize>,
     fixups:             Vec<(LabelID, usize, usize)>,
+    current_label:      Option<LabelID>,
 
     label_to_id:        HashMap<String, LabelID>,
     next_free_label_id: LabelID,
 
-    current_label:      Option<LabelID>,
 }
 
 impl Default for Assembler {
@@ -154,9 +154,9 @@ impl Assembler {
             bytes:              Vec::new(),
             labels:             HashMap::new(),
             fixups:             Vec::new(),
+            current_label:      None,
             label_to_id:        HashMap::new(),
             next_free_label_id: LabelID(0),
-            current_label:      None,
         }
     }
 
@@ -308,8 +308,7 @@ impl Assembler {
     }
 
     fn encode_regimm(&mut self, reg: Reg, imm: i64, size: usize,
-        op: &OpcodeDigit, encoding: &Encoding)
-    {
+                     op: &OpcodeDigit, encoding: &Encoding) {
         let (reg_e, reg_enc) = reg.encoding();
 
         self.override_operand_size(encoding);
@@ -320,8 +319,7 @@ impl Assembler {
     }
 
     fn encode_memreg_regmem(&mut self, reg: Reg, mem: MemOperand,
-        op: &Opcode, encoding: &Encoding)
-    {
+                            op: &Opcode, encoding: &Encoding) {
         let (reg_e, reg_enc) = reg.encoding();
 
         self.override_operand_size(encoding);
@@ -329,8 +327,7 @@ impl Assembler {
     }
 
     fn encode_memimm(&mut self, mem: MemOperand, imm: i64, size: usize,
-        op: &OpcodeDigit, encoding: &Encoding)
-    {
+                     op: &OpcodeDigit, encoding: &Encoding) {
         self.override_operand_size(encoding);
         self.encode_memory_operand(op.digit, false, self.get_rexw(encoding), op.op, mem);
         self.push_imm(imm, size);
@@ -574,14 +571,8 @@ impl Assembler {
         self.push_code(&[scale << 6 | index << 3 | base]);
     }
 
-    fn encode_memory_operand(
-        &mut self,
-        regop:  u8,
-        rex_r:  bool,
-        rex_w:  bool,
-        opcode: &[u8],
-        mem:    MemOperand,
-    ) {
+    fn encode_memory_operand(&mut self, regop: u8, rex_r: bool, rex_w: bool, opcode: &[u8],
+                             mem: MemOperand) {
         let mut require_sib = false;
 
         const RM_SIB:  u8 = 0b100;
