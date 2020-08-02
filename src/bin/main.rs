@@ -117,6 +117,16 @@ fn main() {
 
     //asm.jmp(&[Label("SSSSSS")]);
 
+    asm.label("l1");
+    asm.label(".loc1");
+    asm.label(".loc2");
+    asm.jne(&[Label(".loc1")]);
+
+    asm.label("l2");
+    asm.label(".loc1");
+    asm.label(".loc2");
+    asm.jne(&[Label(".loc1")]);
+
     disasm(asm.bytes());
 }
 

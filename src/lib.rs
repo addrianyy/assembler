@@ -1,5 +1,6 @@
 mod instructions;
 use std::collections::HashMap;
+use std::borrow::Cow;
 
 const MOD_DIRECT: u8 = 0b11;
 
@@ -132,6 +133,8 @@ pub struct Assembler {
 
     label_to_id:        HashMap<String, LabelID>,
     next_free_label_id: LabelID,
+
+    current_label:      Option<LabelID>,
 }
 
 impl Default for Assembler {
@@ -153,6 +156,7 @@ impl Assembler {
             fixups:             Vec::new(),
             label_to_id:        HashMap::new(),
             next_free_label_id: LabelID(0),
+            current_label:      None,
         }
     }
 
@@ -161,20 +165,25 @@ impl Assembler {
     }
 
     pub fn label(&mut self, label: &str) {
+        let is_local = label.starts_with('.');
         let label_id = self.label_to_id(label);
+
+        if !is_local {
+            self.current_label = Some(label_id);
+        }
 
         assert!(self.labels.insert(label_id, self.current_offset()).is_none(),
             "Label {} was already assigned.", label);
     }
 
     pub fn into_bytes(mut self) -> Vec<u8> {
-        self.fixup();
+        self.apply_fixups();
 
         self.bytes
     }
 
     pub fn bytes(&mut self) -> &[u8] {
-        self.fixup();
+        self.apply_fixups();
         self.fixups.clear();
 
         &self.bytes
@@ -188,14 +197,23 @@ impl Assembler {
         self.push_code(instruction);
     }
 
-    fn label_to_id(&mut self, label: &str) -> LabelID {
-        match self.label_to_id.get(label) {
+    fn label_to_id(&mut self, original_label: &str) -> LabelID {
+        let label = if original_label.starts_with('.') {
+            let suffix = self.current_label.map(|x| x.0.to_string())
+                .unwrap_or_else(|| String::from("entry"));
+
+            Cow::Owned(format!("{}_{}", original_label, suffix))
+        } else {
+            Cow::Borrowed(original_label)
+        };
+
+        match self.label_to_id.get(label.as_ref()) {
             Some(label_id) => *label_id,
             None           => {
                 let label_id = self.next_free_label_id;
 
-                assert!(self.label_to_id.insert(label.to_string(), label_id).is_none(),
-                    "Internal error: Label {} was already created.", label);
+                assert!(self.label_to_id.insert(label.into_owned(), label_id).is_none(),
+                    "Internal error: Label {} was already created.", original_label);
 
                 self.next_free_label_id = LabelID(label_id.0
                     .checked_add(1).expect("Label IDs overflowed"));
@@ -205,7 +223,7 @@ impl Assembler {
         }
     }
 
-    fn fixup(&mut self) {
+    fn apply_fixups(&mut self) {
         for &(ref label, offset, size) in &self.fixups {
             use std::convert::TryInto;
 
