@@ -128,7 +128,7 @@ pub struct Assembler {
     operand_size:       OperandSize,
 
     labels:             HashMap<LabelID, usize>,
-    relocations:        Vec<(LabelID, usize, usize)>,
+    fixups:             Vec<(LabelID, usize, usize)>,
 
     label_to_id:        HashMap<String, LabelID>,
     next_free_label_id: LabelID,
@@ -150,7 +150,7 @@ impl Assembler {
             operand_size,
             bytes:              Vec::new(),
             labels:             HashMap::new(),
-            relocations:        Vec::new(),
+            fixups:             Vec::new(),
             label_to_id:        HashMap::new(),
             next_free_label_id: LabelID(0),
         }
@@ -168,14 +168,14 @@ impl Assembler {
     }
 
     pub fn into_bytes(mut self) -> Vec<u8> {
-        self.relocate();
+        self.fixup();
 
         self.bytes
     }
 
     pub fn bytes(&mut self) -> &[u8] {
-        self.relocate();
-        self.relocations.clear();
+        self.fixup();
+        self.fixups.clear();
 
         &self.bytes
     }
@@ -205,8 +205,8 @@ impl Assembler {
         }
     }
 
-    fn relocate(&mut self) {
-        for &(ref label, offset, size) in &self.relocations {
+    fn fixup(&mut self) {
+        for &(ref label, offset, size) in &self.fixups {
             use std::convert::TryInto;
 
             let target = match self.labels.get(label) {
@@ -225,7 +225,7 @@ impl Assembler {
             // target = offset + instruction_size + rel32
             // rel32  = target - offset - instruction_size
             let rel32: i32 = (target.wrapping_sub(offset).wrapping_sub(size) as i64)
-                .try_into().expect("Cannot relocate, target is too far for rel32.");
+                .try_into().expect("Cannot fixup, target is too far for rel32.");
 
             // rel32 is always encoded in last 4 bytes of instruction.
             let write_offset = offset + size - 4;
@@ -359,7 +359,7 @@ impl Assembler {
             let inst_size = self.current_offset() - offset_before;
             let label_id  = self.label_to_id(label);
 
-            self.relocations.push((label_id, offset_before, inst_size));
+            self.fixups.push((label_id, offset_before, inst_size));
         }
     }
 
