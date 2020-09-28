@@ -5,6 +5,14 @@ use asm::Assembler;
 fn main() {
     let mut asm = Assembler::new();
 
+    asm.movzxb(&[Reg(Rax), Reg(Rcx)]);
+    asm.movzx(&[Reg(Rax), Reg(Rcx)]);
+    asm.movsxb(&[Reg(Rax), Reg(Rcx)]);
+    asm.movsx(&[Reg(Rax), Reg(Rcx)]);
+    asm.movsxd(&[Reg(Rax), Reg(Rcx)]);
+
+    asm.imul(&[Reg(Rax), Reg(Rbx)]);
+
     asm.operand_size(asm::OperandSize::Bits16);
     asm.mov(&[Mem(Some(Rax), None, 0), Reg(Rcx)]);
     asm.push(&[Reg(R15)]);
@@ -126,6 +134,20 @@ fn main() {
     asm.label(".loc1");
     asm.label(".loc2");
     asm.jne(&[Label(".loc1")]);
+
+    asm.operand_size(asm::OperandSize::Bits8);
+
+    asm.mov(&[Reg(Rbp), Reg(Rcx)]);
+    asm.mov(&[Mem(Some(Rbp), None, 1), Reg(Rcx)]);
+    asm.mov(&[Reg(Rsp), Mem(Some(Rbp), None, 1)]);
+    asm.mov(&[Reg(Rbx), Imm(11)]);
+
+    asm.test(&[Reg(Rsp), Reg(Rdx)]);
+    asm.test(&[Mem(Some(R15), None, 0), Imm(12)]);
+    
+    asm.shl(&[Reg(R13), Imm(18)]);
+
+    asm.imul(&[Reg(Rbx)]);
 
     disasm(asm.bytes());
 }

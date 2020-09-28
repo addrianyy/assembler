@@ -121,7 +121,7 @@ pub enum OperandSize {
     Bits64 = 64,
     Bits32 = 32,
     Bits16 = 16,
-    //Bits8  = 8,
+    Bits8  = 8,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -394,12 +394,26 @@ impl Assembler {
         self.push_imm(imm, 8);
     }
 
-    fn encode_instruction(&mut self, operands: &[Operand], encoding: &Encoding, name: &str) {
+    fn encode_instruction(&mut self, operands: &[Operand], encoding: &Encoding,
+                          encoding_8bit: Option<&Encoding>, name: &str) {
         macro_rules! fits_within {
             ($value: expr, $type: tt) => {
                 $value as i64 <= $type::MAX as i64 && $value as i64 >= $type::MIN as i64
             }
         }
+
+        let encoding = match self.operand_size {
+            OperandSize::Bits8 => {
+                let encoding = encoding_8bit.unwrap_or_else(|| {
+                    panic!("Instruction {} does not support 8 bit operand size.", name);
+                });
+
+                assert!(encoding.fix_8bit);
+
+                encoding
+            }
+            _ => encoding,
+        };
 
         // Make sure that we encode proper 8 bit register operands.
         self.force_rex = if encoding.fix_8bit {
@@ -421,11 +435,13 @@ impl Assembler {
             false
         };
 
-        // imm32s get truncated to 16 bits with 16 bit operand size.
+        // imm32s get truncated to 16 bits with 16 bit operand size and to 8 bits with 8 bit
+        // operand size.
 
         macro_rules! fits_within_imm32 {
             ($value: expr) => {
                 match self.operand_size {
+                    OperandSize::Bits8  => fits_within!($value, i8),
                     OperandSize::Bits16 => fits_within!($value, i16),
                     _                   => fits_within!($value, i32),
                 }
@@ -433,6 +449,7 @@ impl Assembler {
         }
 
         let imm32_size = match self.operand_size {
+            OperandSize::Bits8  => 1,
             OperandSize::Bits16 => 2,
             _                   => 4,
         };
@@ -550,10 +567,8 @@ impl Assembler {
         // change anything. 8 bit instructions operands are exception. For example:
         // 0b110 encodes DH without REX and SIL with REX. In this case we are required to emit
         // REX.
-        if !self.force_rex {
-            if !w && !r && !x && !b {
-                return;
-            }
+        if !self.force_rex && !w && !r && !x && !b {
+            return;
         }
 
         let w = w as u8;
