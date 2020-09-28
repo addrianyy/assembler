@@ -233,10 +233,10 @@ macro_rules! arith_single_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rexw:RexwMode::Usable,
-                p66: Prefix66Mode::Usable,
-                reg: Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
-                mem: Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
+                rexw: RexwMode::Usable,
+                p66:  Prefix66Mode::Usable,
+                reg:  Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
+                mem:  Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
                 ..DEFAULT_ENCODING
             },
             Some(Encoding {
@@ -366,10 +366,10 @@ make_instruction! {
 make_instruction! {
     pop,
     Encoding {
-        rexw:RexwMode::Implicit,
-        p66: Prefix66Mode::Usable,
-        reg: Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
-        mem: Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
+        rexw: RexwMode::Implicit,
+        p66:  Prefix66Mode::Usable,
+        reg:  Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
+        mem:  Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
         ..DEFAULT_ENCODING
     }
 }
