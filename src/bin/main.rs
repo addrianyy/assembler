@@ -15,6 +15,11 @@ fn main() {
 
     asm.operand_size(asm::OperandSize::Bits16);
     asm.mov(&[Mem(Some(Rax), None, 0), Reg(Rcx)]);
+
+    asm.with_size(asm::OperandSize::Bits8, |asm| {
+        asm.mov(&[Reg(Rsi), Imm(2)]);
+    });
+
     asm.push(&[Reg(R15)]);
 
     asm.operand_size(asm::OperandSize::Bits32);

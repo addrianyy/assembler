@@ -1,5 +1,7 @@
 mod instructions;
+
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::borrow::Cow;
 
 const MOD_DIRECT: u8 = 0b11;
@@ -124,6 +126,20 @@ pub enum OperandSize {
     Bits8  = 8,
 }
 
+impl TryFrom<usize> for OperandSize {
+    type Error = ();
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            8  => Ok(OperandSize::Bits8),
+            16 => Ok(OperandSize::Bits16),
+            32 => Ok(OperandSize::Bits32),
+            64 => Ok(OperandSize::Bits64),
+            _  => Err(()),
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 struct LabelID(usize);
 
@@ -200,6 +216,16 @@ impl Assembler {
 
     pub fn raw_instruction(&mut self, instruction: &[u8]) {
         self.push_code(instruction);
+    }
+
+    pub fn with_size(&mut self, size: OperandSize, func: impl FnOnce(&mut Assembler)) {
+        let prev_operand_size = self.operand_size;
+
+        self.operand_size(size);
+
+        func(self);
+
+        self.operand_size(prev_operand_size);
     }
 
     fn label_to_id(&mut self, original_label: &str) -> LabelID {
