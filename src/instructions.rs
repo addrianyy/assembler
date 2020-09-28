@@ -3,6 +3,7 @@ use super::{Encoding, Opcode, OpcodeDigit, OpcodeRegadd, Assembler, RexMode, Ope
 const DEFAULT_ENCODING: Encoding = Encoding {
     rex:        RexMode::Usable,
     p66:        Prefix66Mode::Usable,
+    fix_8bit:   false,
     regreg:     None,
     regreg_inv: None,
     regimm32:   None,
@@ -110,10 +111,11 @@ macro_rules! conditional_instruction {
         make_instruction! {
             $setcc_name,
             Encoding {
-                rex: RexMode::SilentRequired,
-                p66: Prefix66Mode::Unneeded,
-                reg: Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
-                mem: Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
+                rex:      RexMode::Unneeded,
+                p66:      Prefix66Mode::Unneeded,
+                fix_8bit: true,
+                reg:      Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
+                mem:      Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
                 ..DEFAULT_ENCODING
             }
         }

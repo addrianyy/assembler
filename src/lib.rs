@@ -7,7 +7,6 @@ const MOD_DIRECT: u8 = 0b11;
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum RexMode {
     ExplicitRequired,
-    SilentRequired,
     Implicit,
     Usable,
     Unneeded,
@@ -36,6 +35,9 @@ struct OpcodeRegadd {
 struct Encoding {
     rex:        RexMode,
     p66:        Prefix66Mode,
+
+    /// Instruction may require empty REX prefix to encode proper 8-bit register operand.
+    fix_8bit:   bool,
 
     /// r64, r/m64
     regreg:     Option<Opcode>,
@@ -119,6 +121,7 @@ pub enum OperandSize {
     Bits64 = 64,
     Bits32 = 32,
     Bits16 = 16,
+    //Bits8  = 8,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -135,6 +138,7 @@ pub struct Assembler {
     label_to_id:        HashMap<String, LabelID>,
     next_free_label_id: LabelID,
 
+    force_rex:          bool,
 }
 
 impl Default for Assembler {
@@ -157,6 +161,7 @@ impl Assembler {
             current_label:      None,
             label_to_id:        HashMap::new(),
             next_free_label_id: LabelID(0),
+            force_rex:          false,
         }
     }
 
@@ -260,9 +265,6 @@ impl Assembler {
 
     fn get_rexw(&self, encoding: &Encoding) -> bool {
         match encoding.rex {
-            RexMode::SilentRequired => {
-                true
-            }
             RexMode::Implicit => {
                 // Instructions with implicit REX.W can possibly be encoded with 16 bit operand
                 // size (but not 32).
@@ -399,6 +401,26 @@ impl Assembler {
             }
         }
 
+        // Make sure that we encode proper 8 bit register operands.
+        self.force_rex = if encoding.fix_8bit {
+            let mut force_rex = false;
+
+            for operand in operands {
+                if let Operand::Reg(reg) = operand {
+                    // For this registers to be encoded with 8 bit size REX prefix 
+                    // needs to be present.
+                    if matches!(reg, Reg::Rsp | Reg::Rbp | Reg::Rsi | Reg::Rdi) {
+                        force_rex = true;
+                        break;
+                    }
+                }
+            }
+
+            force_rex
+        } else {
+            false
+        };
+
         // imm32s get truncated to 16 bits with 16 bit operand size.
 
         macro_rules! fits_within_imm32 {
@@ -524,11 +546,14 @@ impl Assembler {
     }
 
     fn rex(&mut self, w: bool, r: bool, x: bool, b: bool) {
-        // REX without any attributes does not need to be emited because it doesn't change anyting.
-        // In 8 bit mode it makes it impossible to encode high registers (AH, CH, ..)
-        // but this assembler doesn't support 8 bit operand size anyway so we ignore that.
-        if !w && !r && !x && !b {
-            return;
+        // Usually REX without any attributes doesn't need to be emited because it doesn't
+        // change anything. 8 bit instructions operands are exception. For example:
+        // 0b110 encodes DH without REX and SIL with REX. In this case we are required to emit
+        // REX.
+        if !self.force_rex {
+            if !w && !r && !x && !b {
+                return;
+            }
         }
 
         let w = w as u8;
