@@ -154,6 +154,34 @@ fn main() {
 
     asm.imul(&[Reg(Rbx)]);
 
+    asm.operand_size(asm::OperandSize::Bits64);
+    asm.movsxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
+    asm.movzxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
+
+    for operand_size in &[asm::OperandSize::Bits8,  asm::OperandSize::Bits16, 
+                          asm::OperandSize::Bits32, asm::OperandSize::Bits64] {
+        asm.operand_size(*operand_size);
+        asm.mov(&[Reg(Rbx), Mem(Some(R9), Some((Rax, 1)), 0)]);
+        asm.or(&[Mem(Some(R9), Some((Rax, 1)), 0), Reg(Rdx)]);
+        asm.mov(&[Mem(Some(R8), Some((Rax, 1)), 0), Reg(Rbx)]);
+
+        asm.nop(&[]);
+        asm.nop(&[]);
+    }
+
+    asm.operand_size(asm::OperandSize::Bits8);
+
+    asm.mov(&[Mem(Some(Rax), None, 0), Reg(Rcx)]);
+
+    asm.operand_size(asm::OperandSize::Bits64);
+    asm.add(&[Reg(Rsp), Imm(0x20)]);
+
+    asm.operand_size(asm::OperandSize::Bits8);
+    asm.add(&[Mem(Some(Rbx), None, 0x1337), Imm(11)]);
+    asm.mov(&[Mem(Some(Rbx), None, 0x1337), Reg(Rdx)]);
+    asm.imul(&[Reg(Rcx)]);
+    asm.cmp(&[Mem(Some(Rbx), None, 0), Imm(0)]);
+
     disasm(asm.bytes());
 }
 
