@@ -303,9 +303,9 @@ macro_rules! extension_instruction {
     }
 }
 extension_instruction!(movzxb, RexMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xb6]);
-extension_instruction!(movzx,  RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xb7]);
+extension_instruction!(movzxw, RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xb7]);
 extension_instruction!(movsxb, RexMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xbe]);
-extension_instruction!(movsx,  RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xbf]);
+extension_instruction!(movsxw, RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xbf]);
 extension_instruction!(movsxd, RexMode::ExplicitRequired, Prefix66Mode::Unusable, &[0x63]);
 
 make_instruction! {

@@ -6,9 +6,9 @@ fn main() {
     let mut asm = Assembler::new();
 
     asm.movzxb(&[Reg(Rax), Reg(Rcx)]);
-    asm.movzx(&[Reg(Rax), Reg(Rcx)]);
+    asm.movzxw(&[Reg(Rax), Reg(Rcx)]);
     asm.movsxb(&[Reg(Rax), Reg(Rcx)]);
-    asm.movsx(&[Reg(Rax), Reg(Rcx)]);
+    asm.movsxw(&[Reg(Rax), Reg(Rcx)]);
     asm.movsxd(&[Reg(Rax), Reg(Rcx)]);
 
     asm.imul(&[Reg(Rax), Reg(Rbx)]);
@@ -23,7 +23,7 @@ fn main() {
     asm.push(&[Reg(R15)]);
 
     asm.operand_size(asm::OperandSize::Bits32);
-    asm.movzx(&[Reg(Rax), Mem(Some(Rax), None, 0)]);
+    asm.movzxw(&[Reg(Rax), Mem(Some(Rax), None, 0)]);
 
     asm.operand_size(asm::OperandSize::Bits64);
 
@@ -181,6 +181,9 @@ fn main() {
     asm.mov(&[Mem(Some(Rbx), None, 0x1337), Reg(Rdx)]);
     asm.imul(&[Reg(Rcx)]);
     asm.cmp(&[Mem(Some(Rbx), None, 0), Imm(0)]);
+
+    asm.operand_size(asm::OperandSize::Bits64);
+    asm.movsxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
 
     disasm(asm.bytes());
 }
