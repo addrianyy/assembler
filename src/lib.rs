@@ -7,7 +7,7 @@ use std::borrow::Cow;
 const MOD_DIRECT: u8 = 0b11;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum RexMode {
+enum RexwMode {
     ExplicitRequired,
     Implicit,
     Usable,
@@ -35,7 +35,7 @@ struct OpcodeRegadd {
 }
 
 struct Encoding {
-    rex:        RexMode,
+    rexw:       RexwMode,
     p66:        Prefix66Mode,
 
     /// Instruction may require empty REX prefix to encode proper 8-bit register operand.
@@ -290,8 +290,8 @@ impl Assembler {
     }
 
     fn get_rexw(&self, encoding: &Encoding) -> bool {
-        match encoding.rex {
-            RexMode::Implicit => {
+        match encoding.rexw {
+            RexwMode::Implicit => {
                 // Instructions with implicit REX.W can possibly be encoded with 16 bit operand
                 // size (but not 32).
                 if self.operand_size == OperandSize::Bits16 &&
@@ -302,12 +302,12 @@ impl Assembler {
                 self.require_64bit();
                 false
             }
-            RexMode::ExplicitRequired => {
+            RexwMode::ExplicitRequired => {
                 self.require_64bit();
                 true
             }
-            RexMode::Usable   => self.operand_size == OperandSize::Bits64,
-            RexMode::Unneeded => false,
+            RexwMode::Usable   => self.operand_size == OperandSize::Bits64,
+            RexwMode::Unneeded => false,
         }
     }
 
@@ -389,7 +389,7 @@ impl Assembler {
     }
 
     fn encode_rel32(&mut self, rel: i32, label: Option<&str>, op: &Opcode, encoding: &Encoding) {
-        assert!(encoding.rex == RexMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
+        assert!(encoding.rexw == RexwMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
             "Relative jumps/calls should not need REX or 66 prefix.");
 
         let offset_before = self.current_offset();

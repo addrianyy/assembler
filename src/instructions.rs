@@ -1,8 +1,8 @@
 use super::{Assembler, Operand, Encoding, Opcode, OpcodeDigit, OpcodeRegadd,
-            RexMode, Prefix66Mode};
+            RexwMode, Prefix66Mode};
 
 const DEFAULT_ENCODING: Encoding = Encoding {
-    rex:        RexMode::Usable,
+    rexw:       RexwMode::Usable,
     p66:        Prefix66Mode::Usable,
     fix_8bit:   false,
     regreg:     None,
@@ -25,7 +25,7 @@ const DEFAULT_ENCODING: Encoding = Encoding {
 };
 
 const DEFAULT_ENCODING_8BIT: Encoding = Encoding {
-    rex:        RexMode::Unneeded,
+    rexw:       RexwMode::Unneeded,
     p66:        Prefix66Mode::Unusable,
     fix_8bit:   true,
     regreg:     None,
@@ -50,7 +50,7 @@ const DEFAULT_ENCODING_8BIT: Encoding = Encoding {
 macro_rules! make_instruction {
     ($name: ident, $encoding: expr, same_encoding) => {
         make_instruction! { $name, $encoding, Some(Encoding {
-            rex:      DEFAULT_ENCODING_8BIT.rex,
+            rexw:     DEFAULT_ENCODING_8BIT.rexw,
             p66:      DEFAULT_ENCODING_8BIT.p66,
             fix_8bit: DEFAULT_ENCODING_8BIT.fix_8bit,
             ..$encoding
@@ -79,7 +79,7 @@ macro_rules! simple_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex:      RexMode::Usable,
+                rexw:     RexwMode::Usable,
                 p66:      Prefix66Mode::Usable,
                 regreg:   Some(Opcode { op: &[$reg_regmem] }),
                 regmem:   Some(Opcode { op: &[$reg_regmem] }),
@@ -112,7 +112,7 @@ macro_rules! shift_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex:      RexMode::Usable,
+                rexw:     RexwMode::Usable,
                 p66:      Prefix66Mode::Usable,
                 regcl:    Some(OpcodeDigit { op: &[0xd3], digit: $digit }),
                 memcl:    Some(OpcodeDigit { op: &[0xd3], digit: $digit }),
@@ -142,7 +142,7 @@ macro_rules! conditional_instruction {
         make_instruction! {
             $jcc_name,
             Encoding {
-                rex:   RexMode::Unneeded,
+                rexw:  RexwMode::Unneeded,
                 p66:   Prefix66Mode::Unneeded,
                 rel32: Some(Opcode { op: &[0x0f, $code] }),
                 ..DEFAULT_ENCODING
@@ -152,7 +152,7 @@ macro_rules! conditional_instruction {
         make_instruction! {
             $cmov_name,
             Encoding {
-                rex:    RexMode::Usable,
+                rexw:   RexwMode::Usable,
                 p66:    Prefix66Mode::Usable,
                 regmem: Some(Opcode { op: &[0x0f, $code - 0x40] }),
                 regreg: Some(Opcode { op: &[0x0f, $code - 0x40] }),
@@ -163,7 +163,7 @@ macro_rules! conditional_instruction {
         make_instruction! {
             $setcc_name,
             Encoding {
-                rex:      RexMode::Unneeded,
+                rexw:     RexwMode::Unneeded,
                 p66:      Prefix66Mode::Unneeded,
                 fix_8bit: true,
                 reg:      Some(OpcodeDigit { op: &[0x0f, $code + 0x10], digit: 0 }),
@@ -211,7 +211,7 @@ macro_rules! bit_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex:        RexMode::Usable,
+                rexw:       RexwMode::Usable,
                 p66:        Prefix66Mode::Usable,
                 reguimm8:   Some(OpcodeDigit { op: &[0x0f, 0xba], digit: $regmem_imm_digit }),
                 memuimm8:   Some(OpcodeDigit { op: &[0x0f, 0xba], digit: $regmem_imm_digit }),
@@ -233,7 +233,7 @@ macro_rules! arith_single_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex: RexMode::Usable,
+                rexw:RexwMode::Usable,
                 p66: Prefix66Mode::Usable,
                 reg: Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
                 mem: Some(OpcodeDigit { op: &[$opcode], digit: $digit }),
@@ -262,7 +262,7 @@ macro_rules! standalone_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex:        RexMode::$prefixes_mode,
+                rexw:       RexwMode::$prefixes_mode,
                 p66:        Prefix66Mode::$prefixes_mode,
                 standalone: Some(Opcode { op: $opcode }),
                 ..DEFAULT_ENCODING
@@ -274,7 +274,7 @@ macro_rules! standalone_instruction {
         make_instruction! {
             $name,
             Encoding {
-                rex:        RexMode::$prefixes_mode,
+                rexw:       RexwMode::$prefixes_mode,
                 p66:        Prefix66Mode::$prefixes_mode,
                 standalone: Some(Opcode { op: $opcode }),
                 ..DEFAULT_ENCODING
@@ -289,11 +289,11 @@ standalone_instruction!(rdtsc, Unneeded, &[0x0f, 0x31], allow_8bit);
 standalone_instruction!(nop,   Unneeded, &[0x90],       allow_8bit);
 
 macro_rules! extension_instruction {
-    ($name: ident, $rex: expr, $p66: expr, $opcode: expr) => {
+    ($name: ident, $rexw:expr, $p66: expr, $opcode: expr) => {
         make_instruction! {
             $name,
             Encoding {
-                rex:    $rex,
+                rexw:   $rexw,
                 p66:    $p66,
                 regreg: Some(Opcode { op: $opcode }),
                 regmem: Some(Opcode { op: $opcode }),
@@ -302,16 +302,16 @@ macro_rules! extension_instruction {
         }
     }
 }
-extension_instruction!(movzxb, RexMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xb6]);
-extension_instruction!(movzxw, RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xb7]);
-extension_instruction!(movsxb, RexMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xbe]);
-extension_instruction!(movsxw, RexMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xbf]);
-extension_instruction!(movsxd, RexMode::ExplicitRequired, Prefix66Mode::Unusable, &[0x63]);
+extension_instruction!(movzxb, RexwMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xb6]);
+extension_instruction!(movzxw, RexwMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xb7]);
+extension_instruction!(movsxb, RexwMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xbe]);
+extension_instruction!(movsxw, RexwMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xbf]);
+extension_instruction!(movsxd, RexwMode::ExplicitRequired, Prefix66Mode::Unusable, &[0x63]);
 
 make_instruction! {
     mov,
     Encoding {
-        rex:      RexMode::Usable,
+        rexw:     RexwMode::Usable,
         p66:      Prefix66Mode::Usable,
         regreg:   Some(Opcode { op: &[0x8b] }),
         regmem:   Some(Opcode { op: &[0x8b] }),
@@ -334,7 +334,7 @@ make_instruction! {
 make_instruction! {
     test,
     Encoding {
-        rex:        RexMode::Usable,
+        rexw:       RexwMode::Usable,
         p66:        Prefix66Mode::Usable,
         regreg_inv: Some(Opcode { op: &[0x85] }),
         memreg:     Some(Opcode { op: &[0x85] }),
@@ -354,7 +354,7 @@ make_instruction! {
 make_instruction! {
     push,
     Encoding {
-        rex:   RexMode::Implicit,
+        rexw:  RexwMode::Implicit,
         p66:   Prefix66Mode::Usable,
         reg:   Some(OpcodeDigit { op: &[0xff], digit: 6 }),
         mem:   Some(OpcodeDigit { op: &[0xff], digit: 6 }),
@@ -366,7 +366,7 @@ make_instruction! {
 make_instruction! {
     pop,
     Encoding {
-        rex: RexMode::Implicit,
+        rexw:RexwMode::Implicit,
         p66: Prefix66Mode::Usable,
         reg: Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
         mem: Some(OpcodeDigit { op: &[0x8f], digit: 0 }),
@@ -377,7 +377,7 @@ make_instruction! {
 make_instruction! {
     jmp,
     Encoding {
-        rex:   RexMode::Unneeded,
+        rexw:  RexwMode::Unneeded,
         p66:   Prefix66Mode::Unneeded,
         rel32: Some(Opcode { op: &[0xe9] }),
         reg:   Some(OpcodeDigit { op: &[0xff], digit: 4 }),
@@ -389,7 +389,7 @@ make_instruction! {
 make_instruction! {
     call,
     Encoding {
-        rex:   RexMode::Unneeded,
+        rexw:  RexwMode::Unneeded,
         p66:   Prefix66Mode::Unneeded,
         rel32: Some(Opcode { op: &[0xe8] }),
         reg:   Some(OpcodeDigit { op: &[0xff], digit: 2 }),
@@ -401,7 +401,7 @@ make_instruction! {
 make_instruction! {
     ret,
     Encoding {
-        rex:        RexMode::Unneeded,
+        rexw:       RexwMode::Unneeded,
         p66:        Prefix66Mode::Unneeded,
         uimm16:     Some(Opcode { op: &[0xc2] }),
         standalone: Some(Opcode { op: &[0xc3] }),
@@ -412,7 +412,7 @@ make_instruction! {
 make_instruction! {
     imul,
     Encoding {
-        rex:    RexMode::Usable,
+        rexw:   RexwMode::Usable,
         p66:    Prefix66Mode::Usable,
         reg:    Some(OpcodeDigit { op: &[0xf7], digit: 5 }),
         mem:    Some(OpcodeDigit { op: &[0xf7], digit: 5 }),
@@ -430,7 +430,7 @@ make_instruction! {
 make_instruction! {
     lea,
     Encoding {
-        rex:    RexMode::Usable,
+        rexw:   RexwMode::Usable,
         p66:    Prefix66Mode::Usable,
         regmem: Some(Opcode { op: &[0x8d] }),
         ..DEFAULT_ENCODING
