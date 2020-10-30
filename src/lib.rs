@@ -49,6 +49,8 @@ struct Encoding {
 
     regimm32:   Option<OpcodeDigit>,
     memimm32:   Option<OpcodeDigit>,
+    regimm8:    Option<OpcodeDigit>,
+    memimm8:    Option<OpcodeDigit>,
     reguimm8:   Option<OpcodeDigit>,
     memuimm8:   Option<OpcodeDigit>,
     regmem:     Option<Opcode>,
@@ -521,6 +523,15 @@ impl Assembler {
                     }
                     _ => panic!("Regreg and inverted regreg both implemented for {}.", name),
                 }
+            }
+            [Operand::Reg(reg), Operand::Imm(imm)]
+                    if fits_within!(imm, i8) && encoding.regimm8.is_some() => {
+                self.encode_regimm(reg, imm, 1, encoding.regimm8.as_ref().unwrap(), encoding);
+            }
+            [Operand::Mem(base, index, disp), Operand::Imm(imm)]
+                    if fits_within!(imm, i8) && encoding.memimm8.is_some() => {
+                self.encode_memimm((base, index, disp), imm, 1,
+                    encoding.memimm8.as_ref().unwrap(), encoding);
             }
             [Operand::Reg(reg), Operand::Imm(imm)]
                     if fits_within!(imm, u8) && encoding.reguimm8.is_some() => {

@@ -5,6 +5,7 @@ use asm::Assembler;
 fn main() {
     let mut asm = Assembler::new();
 
+    asm.add(&[Reg(Rax), Imm(0x4c)]);
     asm.movzxb(&[Reg(Rax), Reg(Rcx)]);
     asm.movzxw(&[Reg(Rax), Reg(Rcx)]);
     asm.movsxb(&[Reg(Rax), Reg(Rcx)]);
@@ -158,6 +159,7 @@ fn main() {
     asm.movsxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
     asm.movzxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
 
+    /*
     for operand_size in &[asm::OperandSize::Bits8,  asm::OperandSize::Bits16, 
                           asm::OperandSize::Bits32, asm::OperandSize::Bits64] {
         asm.operand_size(*operand_size);
@@ -168,6 +170,7 @@ fn main() {
         asm.nop(&[]);
         asm.nop(&[]);
     }
+    */
 
     asm.operand_size(asm::OperandSize::Bits8);
 
@@ -184,6 +187,7 @@ fn main() {
 
     asm.operand_size(asm::OperandSize::Bits64);
     asm.movsxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
+    
 
     disasm(asm.bytes());
 }
