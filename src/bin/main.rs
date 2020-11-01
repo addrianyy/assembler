@@ -1,9 +1,16 @@
-use asm::Operand::{Imm, Mem, Reg, Rel, Label};
+use asm::Operand::Reg;
 use asm::Reg::*;
 use asm::Assembler;
 
 fn main() {
     let mut asm = Assembler::new();
+
+    asm.operand_size(asm::OperandSize::Bits32);
+    asm.movzxb(&[Reg(Rax), Reg(Rbp)]);
+    asm.bts(&[Reg(Rcx), Reg(Rdx)]);
+
+
+    /*
 
     asm.add(&[Reg(Rax), Imm(0x4c)]);
     asm.movzxb(&[Reg(Rax), Reg(Rcx)]);
@@ -187,8 +194,8 @@ fn main() {
 
     asm.operand_size(asm::OperandSize::Bits64);
     asm.movsxb(&[Reg(Rbx), Mem(Some(R8), Some((Rax, 1)), 0)]);
+    */
     
-
     disasm(asm.bytes());
 }
 

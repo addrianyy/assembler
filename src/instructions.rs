@@ -295,24 +295,25 @@ standalone_instruction!(rdtsc, Unneeded, &[0x0f, 0x31], allow_8bit);
 standalone_instruction!(nop,   Unneeded, &[0x90],       allow_8bit);
 
 macro_rules! extension_instruction {
-    ($name: ident, $rexw:expr, $p66: expr, $opcode: expr) => {
+    ($name: ident, $rexw:expr, $p66: expr, $opcode: expr, $fix_8bit: expr) => {
         make_instruction! {
             $name,
             Encoding {
-                rexw:   $rexw,
-                p66:    $p66,
-                regreg: Some(Opcode { op: $opcode }),
-                regmem: Some(Opcode { op: $opcode }),
+                rexw:     $rexw,
+                p66:      $p66,
+                fix_8bit: $fix_8bit,
+                regreg:   Some(Opcode { op: $opcode }),
+                regmem:   Some(Opcode { op: $opcode }),
                 ..DEFAULT_ENCODING
             }
         }
     }
 }
-extension_instruction!(movzxb, RexwMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xb6]);
-extension_instruction!(movzxw, RexwMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xb7]);
-extension_instruction!(movsxb, RexwMode::Usable,           Prefix66Mode::Usable,   &[0x0f, 0xbe]);
-extension_instruction!(movsxw, RexwMode::Usable,           Prefix66Mode::Unusable, &[0x0f, 0xbf]);
-extension_instruction!(movsxd, RexwMode::ExplicitRequired, Prefix66Mode::Unusable, &[0x63]);
+extension_instruction!(movzxb, RexwMode::Usable, Prefix66Mode::Usable,   &[0x0f, 0xb6], true);
+extension_instruction!(movzxw, RexwMode::Usable, Prefix66Mode::Unusable, &[0x0f, 0xb7], false);
+extension_instruction!(movsxb, RexwMode::Usable, Prefix66Mode::Usable,   &[0x0f, 0xbe], true);
+extension_instruction!(movsxw, RexwMode::Usable, Prefix66Mode::Unusable, &[0x0f, 0xbf], false);
+extension_instruction!(movsxd, RexwMode::ExplicitRequired, Prefix66Mode::Unusable, &[0x63], false);
 
 make_instruction! {
     mov,
